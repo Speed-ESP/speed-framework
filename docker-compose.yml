@@ -1,0 +1,15 @@
+version: '3.4'
+
+services:
+  mqtt:
+    image: eclipse-mosquitto:latest
+    ports:
+      - 1883:1883
+    networks:
+      - mosquitto
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+networks:
+    mosquitto:
+        name: mosquitto
+        driver: bridge

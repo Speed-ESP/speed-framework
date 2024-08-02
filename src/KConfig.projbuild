@@ -1,0 +1,26 @@
+menu "Speed Framework"
+  menu "MQTT"
+    config SPEED_FRAMEWORK_USE_MQTT
+      bool "Use MQTT"
+      help
+        Enable the MQTT libary and apply default MQTT configuration to the board. 
+  endmenu
+  menu "BLE"
+    config SPEED_FRAMEWORK_USE_BLE
+      bool "Use BLE"
+      help
+        Enable BLE support
+    menu "BluFi"
+      depends on SPEED_FRAMEWORK_USE_BLE
+      config SPEED_FRAMEWORK_USE_BLUFI
+        bool "Use BLUFI"
+      config SPEED_FRAMEWORK_BLUFI_WIFI_CON_MAX_RETRY
+        int "Wifi connection maximun retry attemps"
+        depends on SPEED_FRAMEWORK_USE_BLUFI
+        range 0 255
+        default 2
+        help
+           WiFi connection maximum retry, from 0 to 255.
+    endmenu
+  endmenu
+endmenu

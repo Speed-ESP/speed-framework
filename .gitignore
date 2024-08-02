@@ -1,0 +1,9 @@
+#PlatformIO
+.pio*
+.vscode
+
+# cmake
+build/
+
+# Compote build output
+dist

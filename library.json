@@ -1,0 +1,29 @@
+{
+    "$schema": "https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/schema/library.json",
+    "name": "Speed Framework",
+    "version": "1.0.0",
+    "description": "Speed Framework IDF C++ based framework to easily use IDF components in C++",
+    "authors": [
+        {
+            "name": "Daniel Meza",
+            "maintainer": true,
+            "email": "daniel.meza2011@outlook.com"
+        }
+    ],
+    "repository": {
+        "url": "https://github.com/Speed-ESP/speed-framework",
+        "type": "git"
+    },
+    "frameworks":[
+        "espidf"
+    ],
+    "platforms":[
+        "espressif32"
+    ],
+    "export": {
+        "exclude": [
+            "sdkconfig.*",
+            "platformmio.ini"
+        ]
+    }
+}
