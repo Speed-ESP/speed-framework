@@ -21,7 +21,7 @@ namespace Speed::Net
         }
 
     public:
-        static SpeedNed &setup()
+        static SpeedNet &setup()
         {
             return get();
         }
