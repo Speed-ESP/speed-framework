@@ -4,17 +4,18 @@
 #define __SPEED_SETTINGS_H__
 
 #include <stdio.h>
-#include <cstring>
-#include <utility>
-#include "nvs_flash.h"
-#include "nvs.h"
-#include "nvs_handle.hpp"
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
 
 #include "esp_mac.h"
-#include <esp_log.h>
+#include "esp_log.h"
+
+#include "nvs_flash.h"
+#include "nvs.h"
+#include "nvs_handle.hpp"
+
 #include <core/singleton_service.hpp>
 namespace Speed::Settings
 {
@@ -42,6 +43,7 @@ namespace Speed::Settings
             ESP_ERROR_CHECK(err);
             ESP_LOGI(TAG_SETTINGS, "Settings properly configured");
         }
+
     public:
         static SpeedSettings &setup(std::string_view ns_name = "storage")
         {
@@ -50,7 +52,7 @@ namespace Speed::Settings
                 ESP_LOGW(TAG_SETTINGS, "Settings already initialized");
                 return get();
             }
-            SpeedSettings& instance = get();
+            SpeedSettings &instance = get();
             instance.ns_name = ns_name;
             return instance;
         }
@@ -60,7 +62,7 @@ namespace Speed::Settings
         {
             esp_err_t err;
             // Handle will automatically close when going out of scope or when it's reset.
-            auto handle = nvs::open_nvs_handle(ns_name.begin(), NVS_READWRITE, &err);
+            auto handle = nvs::open_nvs_handle(ns_name.begin(), NVS_READONLY, &err);
 
             ESP_ERROR_CHECK(err);
             err = handle->get_item(key, item);

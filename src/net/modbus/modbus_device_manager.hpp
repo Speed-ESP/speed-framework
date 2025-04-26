@@ -1,53 +1,59 @@
 #pragma once
 
-#include "modbus_master.hpp"
-#include "modbus_client.hpp"
 #include <memory>
 #include <map>
 #include <vector>
 #include <functional>
+#include <freertos/task.h>
 
-namespace speed {
-namespace net {
-namespace modbus {
+#include <net/modbus/modbus_master.hpp>
+#include <net/modbus/modbus_client.hpp>
 
-// Device discovery callback
-using DeviceDiscoveryCallback = std::function<void(uint8_t address, bool present)>;
+namespace speed
+{
+    namespace net
+    {
+        namespace modbus
+        {
 
-class ModbusDeviceManager {
-public:
-    explicit ModbusDeviceManager(std::shared_ptr<ModbusMaster> master);
+            // Device discovery callback
+            using DeviceDiscoveryCallback = std::function<void(uint8_t address, bool present)>;
 
-    // Device management
-    std::shared_ptr<ModbusClient> addDevice(uint8_t address, const std::string& name = "");
-    void removeDevice(uint8_t address);
-    std::shared_ptr<ModbusClient> getDevice(uint8_t address);
-    std::vector<std::shared_ptr<ModbusClient>> getAllDevices() const;
+            class ModbusDeviceManager
+            {
+            public:
+                explicit ModbusDeviceManager(std::shared_ptr<ModbusMaster> master);
 
-    // Network scanning
-    void scanNetwork(uint8_t startAddr, uint8_t endAddr, DeviceDiscoveryCallback callback);
-    void stopScan();
+                // Device management
+                std::shared_ptr<ModbusClient> addDevice(uint8_t address, const std::string &name = "");
+                void removeDevice(uint8_t address);
+                std::shared_ptr<ModbusClient> getDevice(uint8_t address);
+                std::vector<std::shared_ptr<ModbusClient>> getAllDevices() const;
 
-    // Network statistics
-    const ModbusStatistics& getNetworkStatistics() const;
-    void resetNetworkStatistics();
+                // Network scanning
+                void scanNetwork(uint8_t startAddr, uint8_t endAddr, DeviceDiscoveryCallback callback);
+                void stopScan();
 
-    // Network management
-    void disconnectAll();
-    size_t getDeviceCount() const { return _devices.size(); }
-    bool hasDevice(uint8_t address) const { return _devices.find(address) != _devices.end(); }
+                // Network statistics
+                const ModbusStatistics &getNetworkStatistics() const;
+                void resetNetworkStatistics();
 
-private:
-    std::shared_ptr<ModbusMaster> _master;
-    std::map<uint8_t, std::shared_ptr<ModbusClient>> _devices;
-    bool _scanning{false};
-    TaskHandle_t _scanTask{nullptr};
+                // Network management
+                void disconnectAll();
+                size_t getDeviceCount() const { return _devices.size(); }
+                bool hasDevice(uint8_t address) const { return _devices.find(address) != _devices.end(); }
 
-    static void scanTaskFunction(void* param);
-    void processScanTask(uint8_t startAddr, uint8_t endAddr, DeviceDiscoveryCallback callback);
-    bool testDevicePresence(uint8_t address);
-};
+            private:
+                std::shared_ptr<ModbusMaster> _master;
+                std::map<uint8_t, std::shared_ptr<ModbusClient>> _devices;
+                bool _scanning{false};
+                TaskHandle_t _scanTask{nullptr};
 
-} // namespace modbus
-} // namespace net
+                static void scanTaskFunction(void *param);
+                void processScanTask(uint8_t startAddr, uint8_t endAddr, DeviceDiscoveryCallback callback);
+                bool testDevicePresence(uint8_t address);
+            };
+
+        } // namespace modbus
+    } // namespace net
 } // namespace speed

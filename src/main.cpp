@@ -1,51 +1,57 @@
-#include "mqtt/speed_mqtt.hpp"
-#include "mqtt/speed_mqtt_handlers.hpp"
-#include "ble/speed_ble.hpp"
-#include "ble/blufi/speed_blufi_ble_addon.hpp"
-#include <memory>
 #include <esp_log.h>
-#include "esp_system.h"
-#include "settings/speed_settings.hpp"
-constexpr char *TAG = "SPEED_FRAMEWORK";
-using namespace Speed::Settings;
-using namespace Speed::BLE;
-using namespace Speed::MQTT;
-using namespace Speed::BLE::Blufi;
-static int makeSendText(char *buf, const char *v1, const char *v2, const char *v3, const char *v4)
+#include <functional>
+#include "net/modbus/modbus_defs.hpp"
+#include "net/modbus/modbus_config.hpp"
+#include "net/modbus/modbus_master.hpp"
+#include "net/modbus/modbus_device_manager.hpp"
+#include "net/modbus/transport/modbus_uart_transport.hpp"
+#include "net/modbus/transport/modbus_tcp_transport.hpp"
+#include "driver/gpio.h"
+
+
+using namespace speed::net::modbus;
+
+const char *TAG = "Main";
+extern "C"
 {
-    char DEL = 0x04;
-    sprintf(buf, "%s%c%s%c%s%c%s", v1, DEL, v2, DEL, v3, DEL, v4);
-    ESP_LOGD(TAG, "buf=[%s]", buf);
-    return strlen(buf);
+    void app_main(void);
 }
 
-static void time_task(void *pvParameters)
+std::function<void(void)> hellow = []()
 {
-    for (;;)
-    {
+    ESP_LOGI("Main", "Hello, ESP32!");
+};
 
-        vTaskDelay(5000 / portTICK_PERIOD_MS);
-    }
-}
-
-extern "C" void app_main()
+void app_main()
 {
-    ESP_LOGI(TAG, "[APP] Startup..");
-    ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
 
-    SpeedSettings::setup();
+    // Create TCP transport
+    // auto tcpTransport = std::make_shared<ModbusTcpTransport>("192.168.1.100", 502);
 
-    static auto speed_mqtt = SpeedMQTT();
+    auto test = new ModbusUartTransport(UART_NUM_0, 2, 3, 4, 9600);
+    // Alternative: Create RTU transport
+    auto rtuTransport = std::make_shared<ModbusUartTransport>(
+        UART_NUM_0,
+        2,   // TX
+        3,   // RX
+        4,   // RTS
+        9600 // Baud rate
+    );
 
-    auto speed_ble = SpeedBLE::setup();
-    speed_ble->add_addon(SpeedBlufiAddon::setup());
-    speed_ble->start("MQTT Demo");
+    // Configure master
+    ModbusConfig config;
+    config.responseTimeoutMs = 2000;
+    config.queueSize = 32;
+    config.taskPriority = 5;
 
-    static const auto restart_handler = new Speed::MQTT::RestartMQTTHandler("device/1/restart");
-    speed_mqtt.add_handler(restart_handler);
-
-    while (1)
+    auto master = std::make_shared<ModbusMaster>(rtuTransport, config);
+    if (!master->begin())
     {
-        vTaskDelay(2000);
+        ESP_LOGE(TAG, "Failed to start Modbus master");
+        return;
     }
+
+    // Create device manager
+    auto deviceManager = std::make_shared<ModbusDeviceManager>(master);
+    hellow();
 }

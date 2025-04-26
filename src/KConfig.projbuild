@@ -23,4 +23,23 @@ menu "Speed Framework"
            WiFi connection maximum retry, from 0 to 255.
     endmenu
   endmenu
+  menu "Settings"
+    config SPEED_FRAMEWORK_USE_SETTINGS
+      bool "Use Settings"
+      help
+        Enable settings library.
+  endmenu
+  menu "network"
+    config SPEED_FRAMEWORK_USE_NETWORK
+      bool "Use Network"
+      help
+        Enable network library.
+    menu "Modbus"
+      depends on SPEED_FRAMEWORK_USE_NETWORK
+      config SPEED_FRAMEWORK_USE_MODBUS
+        bool "Use Modbus"
+        help
+          Enable Modbus library.
+    endmenu
+  endmenu
 endmenu

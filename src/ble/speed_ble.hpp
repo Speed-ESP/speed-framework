@@ -1,15 +1,12 @@
 #pragma once
 #ifndef H_SPEED_BLE_
 #define H_SPEED_BLE_
-// #undef max
-// #undef min
-#include "enum_name.h"
+
+#include <vector>
+#include <functional>
+
 #include <memory>
-#include <assert.h>
 #include <stdio.h>
-#include <stdbool.h>
-#include <string.h>
-#include <stdbool.h>
 
 #include "nvs_flash.h"
 
@@ -28,25 +25,17 @@
 #include "host/util/util.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
-#include "console/console.h"
-#include "nimble/ble.h"
 #endif
 
 /* BLE */
 #include "host/ble_uuid.h"
-#include "modlog/modlog.h"
 #include "services/ans/ble_svc_ans.h"
-
 #include "host/util/util.h"
 #include "host/ble_store.h"
 
-#include <vector>
-#include <functional>
-#include <utility>
-#include <exception>
-#include <cstdio>
-#include <typeinfo>
-#include <core/singleton_service.hpp>
+#include "core/singleton_service.hpp"
+#include "core/enum_name.h"
+
 constexpr char *TAG_BLE = "SPEED-BLE";
 
 #define BLE_INFO(fmt, ...) ESP_LOGI(TAG_BLE, fmt, ##__VA_ARGS__)
@@ -74,6 +63,8 @@ static auto bounce(void *priv, Params... params) -> decltype(((*reinterpret_cast
     return ((*reinterpret_cast<TService *>(priv)).*m)(params...);
 }
 #define BOUNCE(c, m) bounce<c, decltype(&c::m), &c::m>
+
+ void ble_print_conn_desc(struct ble_gap_conn_desc *desc);
 
 namespace Speed::BLE
 {
@@ -274,11 +265,11 @@ namespace Speed::BLE
         }
     };
 
-    DECLARE_ENUM(GattServiceType, uint8_t, NONE, PRIMARY, SECONDARY);
+    DECLARE_ENUM(GattServiceType, uint8_t, SECONDARY, PRIMARY, NONE);
 
     class GattService : public ParentGattObject<GattCharacteristic, ble_gatt_chr_def>
     {
-    private:
+    protected:
         GattServiceType type;
 
     protected:
@@ -310,26 +301,29 @@ namespace Speed::BLE
 
         const char *get_type_name()
         {
-            return get_enum_name(type).c_str();
+            return type.get_name().c_str();
         }
     };
 
-    DECLARE_ENUM(GattAdvertiseFlags, uint8_t,
-                 LE_LIMITED_DISCOVERY_MODE = BLE_HS_ADV_F_DISC_LTD,
-                 LE_GENERAL_DISCOVERY_MODE = BLE_HS_ADV_F_DISC_GEN,
-                 BRE_NOT_SUPPORTED = BLE_HS_ADV_F_BREDR_UNSUP);
-
-    inline GattAdvertiseFlags operator|(GattAdvertiseFlags a, GattAdvertiseFlags b)
-    {
-        return static_cast<GattAdvertiseFlags>(static_cast<std::byte>(a) | static_cast<std::byte>(b));
-    }
+    DECLARE_FLAG_ENUM(GattAdvertiseFlags, uint8_t,
+                 LE_LIMITED_DISCOVERY_MODE, BLE_HS_ADV_F_DISC_LTD,
+                 LE_GENERAL_DISCOVERY_MODE, BLE_HS_ADV_F_DISC_GEN,
+                 BRE_NOT_SUPPORTED, BLE_HS_ADV_F_BREDR_UNSUP);
 
     DECLARE_ENUM(GattAdvertiseStartMode, uint8_t, ON_START, MANUALLY, ON_SYNC);
+
+    DECLARE_VALUE_ENUM(OwnAddressType, uint8_t, PUBLIC, 0x00, RANDOM, 0x01, RPA_PUBLIC_DEFAULT, 0x03, RPA_RANDOM_DEFAULT, 0x04);
 
     class GattAdvertise
     {
     protected:
-        uint8_t own_addr_type;
+        OwnAddressType own_addr_type;
+        bool is_connected = false;
+        uint8_t connection_handle = 0;
+
+        GattAdvertise(OwnAddressType own_address_type = OwnAddressType::PUBLIC) : own_addr_type(own_address_type)
+        {
+        }
 
         virtual GattAdvertiseFlags get_flags()
         {
@@ -363,7 +357,102 @@ namespace Speed::BLE
 
         virtual int advertise(struct ble_gap_event *event)
         {
-            MODLOG_DFLT(WARN, "Running default advertise, override this function to handle the advertise: %d", event->type);
+            struct ble_gap_conn_desc desc;
+            int rc;
+            switch (event->type)
+            {
+            case BLE_GAP_EVENT_CONNECT:
+                /* A new connection was established or a connection attempt failed. */
+                BLE_INFO("connection %s; status=%d ",
+                         event->connect.status == 0 ? "established" : "failed",
+                         event->connect.status);
+                if (event->connect.status == 0)
+                {
+                    rc = ble_gap_conn_find(event->connect.conn_handle, &desc);
+                    assert(rc == 0);
+                    ble_print_conn_desc(&desc);
+                    is_connected = true;
+                    connection_handle = event->connect.conn_handle;
+                }
+                BLE_INFO("\n");
+                if (event->connect.status != 0)
+                {
+                    MODLOG_DFLT(WARN, "Connection failed, start to advertise again");
+                    /* Connection failed; resume advertising. */
+                    start();
+                }
+                return 0;
+
+            case BLE_GAP_EVENT_DISCONNECT:
+                BLE_INFO("disconnect; reason=%d ", event->disconnect.reason);
+                ble_print_conn_desc(&event->disconnect.conn);
+                BLE_INFO("\n");
+                is_connected = false;
+                /* Connection terminated; resume advertising. */
+                start();
+                return 0;
+
+            case BLE_GAP_EVENT_CONN_UPDATE:
+                /* The central has updated the connection parameters. */
+                BLE_INFO("connection updated; status=%d ",
+                         event->conn_update.status);
+                rc = ble_gap_conn_find(event->conn_update.conn_handle, &desc);
+                assert(rc == 0);
+                ble_print_conn_desc(&desc);
+                BLE_INFO("\n");
+                return 0;
+
+            case BLE_GAP_EVENT_ADV_COMPLETE:
+                BLE_INFO("advertise complete; reason=%d",
+                         event->adv_complete.reason);
+                start();
+                return 0;
+
+            case BLE_GAP_EVENT_ENC_CHANGE:
+                /* Encryption has been enabled or disabled for this connection. */
+                BLE_INFO("encryption change event; status=%d ",
+                         event->enc_change.status);
+                rc = ble_gap_conn_find(event->enc_change.conn_handle, &desc);
+                assert(rc == 0);
+                ble_print_conn_desc(&desc);
+                return 0;
+            case BLE_GAP_EVENT_SUBSCRIBE:
+                BLE_INFO("subscribe event; conn_handle=%d attr_handle=%d "
+                         "reason=%d prevn=%d curn=%d previ=%d curi=%d",
+                         event->subscribe.conn_handle,
+                         event->subscribe.attr_handle,
+                         event->subscribe.reason,
+                         event->subscribe.prev_notify,
+                         event->subscribe.cur_notify,
+                         event->subscribe.prev_indicate,
+                         event->subscribe.cur_indicate);
+                return 0;
+
+            case BLE_GAP_EVENT_MTU:
+                BLE_INFO("mtu update event; conn_handle=%d cid=%d mtu=%d\n",
+                         event->mtu.conn_handle,
+                         event->mtu.channel_id,
+                         event->mtu.value);
+                return 0;
+            case BLE_GAP_EVENT_REPEAT_PAIRING:
+                /* We already have a bond with the peer, but it is attempting to
+                 * establish a new secure link.  This app sacrifices security for
+                 * convenience: just throw away the old bond and accept the new link.
+                 */
+
+                /* Delete the old bond. */
+                rc = ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
+                assert(rc == 0);
+                ble_store_util_delete_peer(&desc.peer_id_addr);
+
+                /* Return BLE_GAP_REPEAT_PAIRING_RETRY to indicate that the host should
+                 * continue with the pairing operation.
+                 */
+                return BLE_GAP_REPEAT_PAIRING_RETRY;
+
+            default:
+                return 0;
+            }
             return 0;
         }
 
@@ -386,9 +475,14 @@ namespace Speed::BLE
             return GattAdvertiseStartMode::ON_SYNC;
         }
 
-        void start(uint8_t addr_type)
+        void start()
         {
-            MODLOG_DFLT(INFO, "Starting to advertise, addr_type: %d", addr_type);
+            start(own_addr_type);
+        }
+
+        void start(OwnAddressType addr_type)
+        {
+            MODLOG_DFLT(INFO, "Starting to advertise, addr_type: %s", addr_type.get_c_name());
             this->own_addr_type = addr_type;
 
             struct ble_gap_adv_params adv_params;
@@ -398,7 +492,7 @@ namespace Speed::BLE
 
             memset(&fields, 0, sizeof fields);
 
-            fields.flags = static_cast<uint8_t>(get_flags());
+            fields.flags = get_flags();
 
             fields.tx_pwr_lvl_is_present = 1;
             fields.tx_pwr_lvl = BLE_HS_ADV_TX_PWR_LVL_AUTO;
@@ -550,7 +644,7 @@ namespace Speed::BLE
         void configure(std::string_view device_name);
 
     public:
-        static SpeedBLE *setup()
+        static SpeedBLE *create()
         {
             return &get();
         }

@@ -1,10 +1,35 @@
 #include "speed_ble.hpp"
+#include "host/ble_hs.h"
+
 #include <settings/speed_settings.hpp>
-using namespace Speed::BLE;
-using namespace Speed::Settings;
-void SpeedBLE::configure(std::string_view device_name)
+
+
+void ble_print_conn_desc(struct ble_gap_conn_desc *desc)
 {
-    SpeedSettings::setup();
+    MODLOG_DFLT(INFO, "handle=%d our_ota_addr_type=%d our_ota_addr=",
+                desc->conn_handle, desc->our_ota_addr.type);
+    print_addr(desc->our_ota_addr.val);
+    MODLOG_DFLT(INFO, " our_id_addr_type=%d our_id_addr=",
+                desc->our_id_addr.type);
+    print_addr(desc->our_id_addr.val);
+    MODLOG_DFLT(INFO, " peer_ota_addr_type=%d peer_ota_addr=",
+                desc->peer_ota_addr.type);
+    print_addr(desc->peer_ota_addr.val);
+    MODLOG_DFLT(INFO, " peer_id_addr_type=%d peer_id_addr=",
+                desc->peer_id_addr.type);
+    print_addr(desc->peer_id_addr.val);
+    MODLOG_DFLT(INFO, " conn_itvl=%d conn_latency=%d supervision_timeout=%d "
+                      "encrypted=%d authenticated=%d bonded=%d\n",
+                desc->conn_itvl, desc->conn_latency,
+                desc->supervision_timeout,
+                desc->sec_state.encrypted,
+                desc->sec_state.authenticated,
+                desc->sec_state.bonded);
+}
+
+void Speed::BLE::SpeedBLE::configure(std::string_view device_name)
+{
+    Speed::Settings::SpeedSettings::setup();
     esp_err_t ret = nimble_port_init();
     if (ret != ESP_OK)
     {
