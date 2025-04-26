@@ -2,6 +2,7 @@
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 #include <cstring>
+#include <inttypes.h>
 #include <net/modbus/modbus_defs.hpp>
 
 #include <net/modbus/transport/modbus_tcp_transport.hpp>
@@ -113,7 +114,7 @@ namespace speed
                 }
 
                 _connected = true;
-                ESP_LOGI(TAG, "Successfully connected to %s:%d", _host.c_str(), _port);
+                ESP_LOGI(TAG, "Successfully connected to %s:%" PRIu16, _host.c_str(), _port);
                 return true;
             }
 
@@ -195,14 +196,14 @@ namespace speed
                 }
 
                 // Send header
-                if (send(reinterpret_cast<uint8_t *>(&header), sizeof(header)) < 0)
+                if (!send(reinterpret_cast<uint8_t *>(&header), sizeof(header)))
                 {
                     ESP_LOGE(TAG, "Failed to send TCP header");
                     return false;
                 }
 
                 // Send PDU (skip first byte as it's already in header.unitId)
-                if (send(data + 1, length - 1) < 0)
+                if (!send(data + 1, length - 1))
                 {
                     ESP_LOGE(TAG, "Failed to send PDU");
                     return false;
@@ -231,7 +232,7 @@ namespace speed
                 std::lock_guard<std::mutex> lock(_receiveMutex);
 
                 ModbusTcpHeader header;
-                if (receive(reinterpret_cast<uint8_t *>(&header), sizeof(header), timeout_ms) < 0)
+                if (!receive(reinterpret_cast<uint8_t *>(&header), sizeof(header), timeout_ms))
                 {
                     ESP_LOGE(TAG, "Failed to receive TCP header");
                     return false;
@@ -256,7 +257,7 @@ namespace speed
                 buffer[0] = header.unitId;
 
                 // Receive PDU
-                if (receive(buffer + 1, pduLength, timeout_ms) < 0)
+                if (!receive(buffer + 1, pduLength, timeout_ms))
                 {
                     ESP_LOGE(TAG, "Failed to receive PDU");
                     return false;

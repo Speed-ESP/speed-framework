@@ -30,6 +30,12 @@ namespace speed
                 virtual bool receive(uint8_t *buffer, size_t expected_length, uint32_t timeout_ms) = 0;
                 virtual void flush() = 0;
                 virtual ModbusTransportType getType() const = 0;
+                
+                // New methods for frame length calculation
+                virtual size_t getHeaderSize() const = 0;
+                virtual size_t getFooterSize() const = 0;
+                virtual size_t calculateFrameLength(size_t pduLength) const = 0;
+                virtual size_t getExceptionResponseLength() const = 0;
 
                 static constexpr size_t MAX_FRAME_SIZE = 256;
             };

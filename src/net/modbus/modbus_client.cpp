@@ -1,5 +1,7 @@
 #include <net/modbus/modbus_client.hpp>
+#include <net/modbus/modbus_utils.hpp>
 #include "esp_log.h"
+#include <inttypes.h>
 namespace speed
 {
     namespace net
@@ -171,12 +173,12 @@ namespace speed
                 {
                     if (status == TransactionStatus::Success)
                     {
-                        updateCache(address, value ? 1 : 0);
+                        updateCache(address, value ? static_cast<uint16_t>(1) : static_cast<uint16_t>(0));
                         if (callback)
                         {
                             ModbusValue modbusValue{
                                 .address = address,
-                                .value = value ? 1 : 0,
+                                .value = static_cast<uint16_t>(value),
                                 .timestamp = xTaskGetTickCount(),
                                 .valid = true};
                             callback(modbusValue);
@@ -219,7 +221,7 @@ namespace speed
             {
                 if (intervalMs < ModbusConstants::MIN_POLL_INTERVAL_MS)
                 {
-                    ESP_LOGW(TAG, "Poll interval %d ms is too small, using minimum %d ms",
+                    ESP_LOGW(TAG, "Poll interval %" PRIu32 " ms is too small, using minimum %" PRIu32 " ms",
                              intervalMs, ModbusConstants::MIN_POLL_INTERVAL_MS);
                     intervalMs = ModbusConstants::MIN_POLL_INTERVAL_MS;
                 }
@@ -230,7 +232,7 @@ namespace speed
                     .callback = callback};
 
                 _pollConfig[address] = pollInfo;
-                ESP_LOGI(TAG, "Enabled polling for address 0x%04X with interval %d ms", address, intervalMs);
+                ESP_LOGI(TAG, "Enabled polling for address 0x%04X with interval %" PRIu32 " ms", address, intervalMs);
             }
 
             void ModbusClient::disablePolling(uint16_t address)
@@ -250,12 +252,12 @@ namespace speed
                 {
                     if (intervalMs < ModbusConstants::MIN_POLL_INTERVAL_MS)
                     {
-                        ESP_LOGW(TAG, "Poll interval %d ms is too small, using minimum %d ms",
+                        ESP_LOGW(TAG, "Poll interval %" PRIu32 " ms is too small, using minimum %" PRIu32 " ms",
                                  intervalMs, ModbusConstants::MIN_POLL_INTERVAL_MS);
                         intervalMs = ModbusConstants::MIN_POLL_INTERVAL_MS;
                     }
                     it->second.intervalMs = intervalMs;
-                    ESP_LOGI(TAG, "Updated polling interval for address 0x%04X to %d ms", address, intervalMs);
+                    ESP_LOGI(TAG, "Updated polling interval for address 0x%04X to %" PRIu32 " ms", address, intervalMs);
                 }
                 else
                 {

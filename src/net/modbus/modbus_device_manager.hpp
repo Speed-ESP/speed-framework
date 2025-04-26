@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 #include <functional>
+#include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
 #include <net/modbus/modbus_master.hpp>

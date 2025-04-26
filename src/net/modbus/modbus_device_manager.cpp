@@ -1,7 +1,8 @@
+#include "freertos/mpu_wrappers.h"
 #include <net/modbus/modbus_device_manager.hpp>
 #include "esp_log.h"
 #include <atomic>
-#include "freertos/mpu_wrappers.h"
+#include <inttypes.h>
 
 namespace speed
 {
@@ -31,13 +32,13 @@ namespace speed
             {
                 if (hasDevice(address))
                 {
-                    ESP_LOGW(TAG, "Device with address %d already exists", address);
+                    ESP_LOGW(TAG, "Device with address %" PRIu8 " already exists", address);
                     return _devices[address];
                 }
 
                 auto client = std::make_shared<ModbusClient>(_master, address, name);
                 _devices[address] = client;
-                ESP_LOGI(TAG, "Added device %s with address %d", name.empty() ? "unnamed" : name.c_str(), address);
+                ESP_LOGI(TAG, "Added device %s with address %" PRIu8, name.empty() ? "unnamed" : name.c_str(), address);
                 return client;
             }
 
@@ -46,7 +47,7 @@ namespace speed
                 auto it = _devices.find(address);
                 if (it != _devices.end())
                 {
-                    ESP_LOGI(TAG, "Removing device %s with address %d",
+                    ESP_LOGI(TAG, "Removing device %s with address %" PRIu8,
                              it->second->getName().empty() ? "unnamed" : it->second->getName().c_str(), address);
                     _devices.erase(it);
                 }
@@ -79,7 +80,7 @@ namespace speed
 
                 if (startAddr > endAddr || endAddr > ModbusConstants::MAX_DEVICE_ADDRESS)
                 {
-                    ESP_LOGE(TAG, "Invalid address range: %d - %d", startAddr, endAddr);
+                    ESP_LOGE(TAG, "Invalid address range: %" PRIu8 " - %" PRIu8, startAddr, endAddr);
                     return;
                 }
 
@@ -133,7 +134,7 @@ namespace speed
 
             void ModbusDeviceManager::processScanTask(uint8_t startAddr, uint8_t endAddr, DeviceDiscoveryCallback callback)
             {
-                ESP_LOGI(TAG, "Starting network scan from address %d to %d", startAddr, endAddr);
+                ESP_LOGI(TAG, "Starting network scan from address %" PRIu8 " to %" PRIu8, startAddr, endAddr);
 
                 for (uint8_t addr = startAddr; addr <= endAddr && _scanning; addr++)
                 {

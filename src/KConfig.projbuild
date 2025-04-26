@@ -1,18 +1,29 @@
 menu "Speed Framework"
+  config SPEED_FRAMEWORK_ENABLED
+    bool "Enabled"
+    imply COMPILER_CXX_EXCEPTIONS
+    imply COMPILER_CXX_RTTI
+    help
+      Enable the speed framework libraries
   menu "MQTT"
+    depends on SPEED_FRAMEWORK_ENABLED
     config SPEED_FRAMEWORK_USE_MQTT
       bool "Use MQTT"
       help
         Enable the MQTT libary and apply default MQTT configuration to the board. 
   endmenu
   menu "BLE"
+    depends on SPEED_FRAMEWORK_ENABLED
     config SPEED_FRAMEWORK_USE_BLE
       bool "Use BLE"
+      imply BT_ENABLED
+      imply BT_NIMBLE_ENABLED
       help
         Enable BLE support
     menu "BluFi"
       depends on SPEED_FRAMEWORK_USE_BLE
       config SPEED_FRAMEWORK_USE_BLUFI
+        imply NIMBLE_BLUFI_ENABLE
         bool "Use BLUFI"
       config SPEED_FRAMEWORK_BLUFI_WIFI_CON_MAX_RETRY
         int "Wifi connection maximun retry attemps"
@@ -24,12 +35,14 @@ menu "Speed Framework"
     endmenu
   endmenu
   menu "Settings"
+    depends on SPEED_FRAMEWORK_ENABLED
     config SPEED_FRAMEWORK_USE_SETTINGS
       bool "Use Settings"
       help
         Enable settings library.
   endmenu
   menu "network"
+    depends on SPEED_FRAMEWORK_ENABLED
     config SPEED_FRAMEWORK_USE_NETWORK
       bool "Use Network"
       help

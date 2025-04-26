@@ -3,6 +3,10 @@
 #ifndef __SPEED_MQTT_H__
 #define __SPEED_MQTT_H__
 
+#if !defined(CONFIG_SPEED_FRAMEWORK_USE_MQTT)
+#error "Enable modbus in Speed Framework -> Modbus using menuconfig"
+#endif
+
 #include <stdio.h>
 #include <stdexcept>
 #include <string>

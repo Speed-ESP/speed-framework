@@ -2,6 +2,10 @@
 #ifndef __SPEED_BLUFI_BLE_ADDON_H__
 #define __SPEED_BLUFI_BLE_ADDON_H__
 
+#if !defined(CONFIG_SPEED_FRAMEWORK_USE_BLUFI)
+#error "Enable modbus in Speed Framework -> Modbus using menuconfig"
+#endif
+
 #include "esp_system.h"
 #include <stdio.h>
 #include <stdlib.h>

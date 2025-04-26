@@ -3,6 +3,7 @@
 #include "driver/uart.h"
 
 #include <net/modbus/transport/modbus_transport.hpp>
+#include <net/modbus/modbus_defs.hpp>
 
 namespace speed
 {
@@ -25,6 +26,18 @@ namespace speed
                 bool receive(uint8_t *buffer, size_t expected_length, uint32_t timeout_ms) override;
                 void flush() override;
                 ModbusTransportType getType() const override { return ModbusTransportType::RTU; }
+                
+                // Frame length calculation methods
+                size_t getHeaderSize() const override { return ModbusConstants::RTU_HEADER_SIZE; }
+                size_t getFooterSize() const override { return ModbusConstants::RTU_CRC_SIZE; }
+                
+                size_t calculateFrameLength(size_t pduLength) const override { 
+                    return getHeaderSize() + pduLength + getFooterSize();
+                }
+                
+                size_t getExceptionResponseLength() const override { 
+                    return ModbusConstants::RTU_EXCEPTION_LENGTH;
+                }
 
             private:
                 uart_port_t _uart_num;

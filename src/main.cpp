@@ -28,7 +28,6 @@ void app_main()
     // Create TCP transport
     // auto tcpTransport = std::make_shared<ModbusTcpTransport>("192.168.1.100", 502);
 
-    auto test = new ModbusUartTransport(UART_NUM_0, 2, 3, 4, 9600);
     // Alternative: Create RTU transport
     auto rtuTransport = std::make_shared<ModbusUartTransport>(
         UART_NUM_0,

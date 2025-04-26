@@ -1,10 +1,11 @@
 #pragma once
 
-#include <net/modbus/modbus_master.hpp>
 #include <memory>
 #include <map>
 #include <string>
 #include <functional>
+
+#include <net/modbus/modbus_master.hpp>
 
 namespace speed
 {

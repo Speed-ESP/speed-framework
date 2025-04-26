@@ -5,6 +5,7 @@
 #include <mutex>
 #include <atomic>
 #include <net/modbus/transport/modbus_transport.hpp>
+#include <net/modbus/modbus_defs.hpp>
 #include "lwip/sockets.h"
 namespace speed
 {
@@ -35,6 +36,18 @@ namespace speed
                 bool receive(uint8_t *buffer, size_t expected_length, uint32_t timeout_ms) override;
                 void flush() override;
                 ModbusTransportType getType() const override { return ModbusTransportType::TCP; }
+
+                // Frame length calculation methods
+                size_t getHeaderSize() const override { return ModbusConstants::TCP_HEADER_SIZE; }
+                size_t getFooterSize() const override { return 0; } // TCP doesn't use CRC
+                
+                size_t calculateFrameLength(size_t pduLength) const override { 
+                    return getHeaderSize() + pduLength;
+                }
+                
+                size_t getExceptionResponseLength() const override { 
+                    return ModbusConstants::TCP_EXCEPTION_LENGTH;
+                }
 
                 // TCP-specific methods
                 void setKeepAlive(bool enabled, uint32_t idle = 7200, uint32_t interval = 75, uint32_t count = 9);

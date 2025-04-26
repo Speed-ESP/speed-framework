@@ -2,7 +2,6 @@
 
 #ifndef __SPEED_SETTINGS_H__
 #define __SPEED_SETTINGS_H__
-
 #include <stdio.h>
 
 #include "freertos/FreeRTOS.h"
@@ -20,7 +19,7 @@
 namespace Speed::Settings
 {
     using namespace Speed::Core;
-    constexpr char *TAG_SETTINGS = "SPEED-SETTINGS";
+    constexpr const char *TAG_SETTINGS = "SPEED-SETTINGS";
     class SpeedSettings : SingletonService<SpeedSettings>
     {
     private:

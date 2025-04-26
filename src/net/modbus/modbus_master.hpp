@@ -1,5 +1,7 @@
 #pragma once
-
+#if !defined(CONFIG_SPEED_FRAMEWORK_USE_MODBUS)
+#warning "Enable modbus in Speed Framework -> Modbus using menuconfig"
+#endif
 #include <cstdint>
 #include <vector>
 #include <memory>
@@ -50,7 +52,6 @@ namespace speed
                 // Diagnostics and management
                 const ModbusStatistics &getStatistics() const { return _statistics; }
                 void resetStatistics() { _statistics.reset(); }
-                void setConfig(const ModbusConfig &config);
                 const ModbusConfig &getConfig() const { return _config; }
                 bool isConnected() const { return _transport && _transport->isConnected(); }
 
@@ -68,7 +69,6 @@ namespace speed
                 SemaphoreHandle_t _transactionSemaphore;
 
                 static void modbusTask(void *parameter);
-                void processModbusTask();
                 bool processRequest(ModbusTransaction &transaction);
                 bool validateRequest(const ModbusTransaction &transaction) const;
                 bool handleModbusException(uint8_t exceptionCode, ModbusTransaction &transaction);

@@ -2,6 +2,9 @@
 #ifndef H_SPEED_BLE_
 #define H_SPEED_BLE_
 
+#if !defined(CONFIG_SPEED_FRAMEWORK_USE_BLE)
+    #error "Please enable BLE Speed Framework by running menuconfig"
+#endif
 #include <vector>
 #include <functional>
 

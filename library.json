@@ -25,5 +25,13 @@
             "sdkconfig.*",
             "platformmio.ini"
         ]
-    }
+    },
+    "dependencies":[
+        {
+            "name": "SmartEnum",
+            "version": "1.0.1",
+            "frameworks":["*"],
+            "platforms": ["*"]
+        }
+    ]
 }

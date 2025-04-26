@@ -1,5 +1,5 @@
 #include "esp_log.h"
-
+#include <inttypes.h>
 
 #include <driver/gpio.h>
 #include <rom/ets_sys.h>
@@ -37,7 +37,7 @@ namespace speed
                 esp_err_t err = uart_param_config(_uart_num, &uart_config);
                 if (err != ESP_OK)
                 {
-                    ESP_LOGE(TAG, "Failed to configure UART parameters");
+                    ESP_LOGE(TAG, "Failed to configure UART parameters with baud rate %d", _baud_rate);
                     return false;
                 }
 
