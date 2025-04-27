@@ -4,6 +4,7 @@
 
 #include <net/modbus/transport/modbus_transport.hpp>
 #include <net/modbus/modbus_defs.hpp>
+#include <net/modbus/packager/modbus_packager_factory.hpp>
 
 namespace speed
 {
@@ -145,6 +146,11 @@ namespace speed
                 
                 size_t getExceptionResponseLength() const override { 
                     return ModbusConstants::RTU_EXCEPTION_LENGTH;
+                }
+                
+                // Get the default packager for UART transport (RTU)
+                std::shared_ptr<ModbusPackager> getDefaultPackager() const override {
+                    return ModbusPackagerFactory::createRtuPackager();
                 }
 
             private:

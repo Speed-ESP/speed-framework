@@ -10,7 +10,8 @@ namespace speed
     {
         namespace modbus
         {
-
+            // Forward declaration
+            class ModbusPackager;
 
             class ModbusTransport
             {
@@ -30,6 +31,9 @@ namespace speed
                 virtual size_t getFooterSize() const = 0;
                 virtual size_t calculateFrameLength(size_t pduLength) const = 0;
                 virtual size_t getExceptionResponseLength() const = 0;
+
+                // Get the default packager for this transport
+                virtual std::shared_ptr<ModbusPackager> getDefaultPackager() const = 0;
 
                 static constexpr size_t MAX_FRAME_SIZE = 256;
             };

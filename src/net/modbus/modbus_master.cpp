@@ -569,12 +569,9 @@ namespace speed
                     return;
                 }
                 
-                // Otherwise, create a default packager based on transport type
-                // We'll check if this is a TCP transport by checking for a specific header size
-                bool isTcpTransport = (_transport->getHeaderSize() == ModbusConstants::TCP_HEADER_SIZE);
-                
-                _packager = ModbusPackagerFactory::createDefaultPackager(!isTcpTransport);
-                ESP_LOGI(TAG, "Created default %s packager", isTcpTransport ? "MBAP" : "RTU");
+                // Otherwise, use the transport's default packager
+                _packager = _transport->getDefaultPackager();
+                ESP_LOGI(TAG, "Using default packager from transport");
             }
 
         } // namespace modbus

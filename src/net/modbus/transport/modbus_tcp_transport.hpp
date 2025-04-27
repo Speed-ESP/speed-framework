@@ -7,6 +7,7 @@
 #include <vector>
 #include <net/modbus/transport/modbus_transport.hpp>
 #include <net/modbus/modbus_defs.hpp>
+#include <net/modbus/packager/modbus_packager_factory.hpp>
 #include "lwip/sockets.h"
 namespace speed
 {
@@ -49,6 +50,11 @@ namespace speed
                 
                 size_t getExceptionResponseLength() const override { 
                     return ModbusConstants::TCP_EXCEPTION_LENGTH;
+                }
+
+                // Get the default packager for TCP transport (MBAP)
+                std::shared_ptr<ModbusPackager> getDefaultPackager() const override {
+                    return ModbusPackagerFactory::createMbapPackager();
                 }
 
                 // TCP-specific methods
