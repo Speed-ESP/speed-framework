@@ -65,4 +65,4 @@ set(app_sources
     ${SETTINGS_SOURCES} 
     ${ENTRY_SOURCE})
 
-idf_component_register(SRCS ${app_sources})
+idf_component_register(SRCS ${app_sources} REQUIRES esp_wifi)

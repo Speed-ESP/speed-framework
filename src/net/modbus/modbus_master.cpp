@@ -56,12 +56,15 @@ namespace speed
                     _requestQueue = nullptr;
                     return false;
                 }
+                ESP_LOGD(TAG, "Processing modbus task crated with priority: %lu, and stack: %lu", _config.taskPriority, _config.stackSize);
+                
 
                 return true;
             }
 
             void ModbusMaster::stop()
             {
+                ESP_LOGI(TAG, "STOPPING MODBUS!!!!");
                 if (_running)
                 {
                     _running = false;
@@ -269,7 +272,7 @@ namespace speed
                 {
                     return false;
                 }
-
+                ESP_LOGD(TAG, "Queuing request with transacitonId %u to device %d", transaction.transactionId, transaction.slaveAddr);
                 if (xQueueSend(_requestQueue, &transaction, pdMS_TO_TICKS(_config.queueTimeoutMs)) != pdTRUE)
                 {
                     ESP_LOGE(TAG, "Failed to queue Modbus request");
@@ -291,14 +294,15 @@ namespace speed
                 ModbusMaster* self = (ModbusMaster*)parameter;
                 ModbusTransaction transaction;
                 TickType_t lastCleanupTime = xTaskGetTickCount();
-
+                ESP_LOGI(TAG, "Starting processing request task, is running? %d", self->_running.load());
                 while (self->_running)
                 {
+                    ESP_LOGD(TAG, "Dequeing from request queue");
                     if (xQueueReceive(self->_requestQueue, &transaction, pdMS_TO_TICKS(self->_config.queueTimeoutMs)) == pdTRUE)
                     {
                         self->processRequest(transaction);
                     }
-
+                    ESP_LOGD(TAG, "Couldn't read from the request queue queue");
                     // Periodic cleanup of timed-out transactions
                     if ((xTaskGetTickCount() - lastCleanupTime) > pdMS_TO_TICKS(1000))
                     {
@@ -306,10 +310,13 @@ namespace speed
                         lastCleanupTime = xTaskGetTickCount();
                     }
                 }
+
+                ESP_LOGI(TAG, "Exiting processing request task");
             }
 
             bool ModbusMaster::processRequest(ModbusTransaction &transaction)
             {
+                ESP_LOGD(TAG,"Processing request id: %d, to device: %d", transaction.transactionId, transaction.slaveAddr);
                 std::vector<uint8_t> requestData;
                 requestData.push_back(transaction.slaveAddr);
                 requestData.push_back(static_cast<uint8_t>(transaction.function));
@@ -326,7 +333,6 @@ namespace speed
                 requestData.push_back(crc >> 8);
 
                 _transport->flush();
-
                 if (!_transport->send(requestData.data(), requestData.size()))
                 {
                     ESP_LOGE(TAG, "Failed to send request");
@@ -442,6 +448,7 @@ namespace speed
 
             void ModbusMaster::cleanupTimedOutTransactions()
             {
+                ESP_LOGD(TAG,"Cleaning timed out transactions");
                 std::lock_guard<std::mutex> lock(_transactionMutex);
                 auto now = xTaskGetTickCount();
 
@@ -453,6 +460,9 @@ namespace speed
                         {
                             it->second.callback(it->second.slaveAddr, it->second.function, {}, TransactionStatus::Timeout);
                         }
+                        ESP_LOGD(TAG, "Transaction %u to slave %d timed out", it->first, it->second.slaveAddr);
+                        _statistics.timeouts++;
+                        _statistics.failedTransactions++;
                         it = _pendingTransactions.erase(it);
                     }
                     else

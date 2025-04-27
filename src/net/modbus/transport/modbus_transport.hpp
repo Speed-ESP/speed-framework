@@ -11,11 +11,6 @@ namespace speed
         namespace modbus
         {
 
-            enum class ModbusTransportType
-            {
-                TCP,
-                RTU
-            };
 
             class ModbusTransport
             {
@@ -29,7 +24,6 @@ namespace speed
                 virtual bool send(const uint8_t *data, size_t length) = 0;
                 virtual bool receive(uint8_t *buffer, size_t expected_length, uint32_t timeout_ms) = 0;
                 virtual void flush() = 0;
-                virtual ModbusTransportType getType() const = 0;
                 
                 // New methods for frame length calculation
                 virtual size_t getHeaderSize() const = 0;

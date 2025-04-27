@@ -29,7 +29,7 @@ void ble_print_conn_desc(struct ble_gap_conn_desc *desc)
 
 void Speed::BLE::SpeedBLE::configure(std::string_view device_name)
 {
-    Speed::Settings::SpeedSettings::setup();
+    speed::settings::SpeedSettings::setup();
     esp_err_t ret = nimble_port_init();
     if (ret != ESP_OK)
     {

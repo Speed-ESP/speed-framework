@@ -12,7 +12,20 @@ namespace speed
             static const char *TAG = "ModbusClient";
 
             ModbusClient::ModbusClient(std::shared_ptr<ModbusMaster> master, uint8_t slaveAddress, const std::string &name)
-                : _master(master), _slaveAddress(slaveAddress), _name(name) {}
+                : _master(master), _slaveAddress(slaveAddress), _name(name) 
+            {
+                _pollConfigMutex = xSemaphoreCreateMutex();
+                // No longer starting polling task here as polling is now managed by the device manager
+            }
+
+            ModbusClient::~ModbusClient()
+            {
+                if (_pollConfigMutex)
+                {
+                    vSemaphoreDelete(_pollConfigMutex);
+                    _pollConfigMutex = nullptr;
+                }
+            }
 
             bool ModbusClient::readHoldingRegister(uint16_t address, ValueUpdateCallback callback)
             {
@@ -226,42 +239,71 @@ namespace speed
                     intervalMs = ModbusConstants::MIN_POLL_INTERVAL_MS;
                 }
 
-                PollInfo pollInfo{
-                    .intervalMs = intervalMs,
-                    .lastPollTime = 0,
-                    .callback = callback};
+                if (xSemaphoreTake(_pollConfigMutex, pdMS_TO_TICKS(100)) == pdTRUE)
+                {
+                    PollInfo pollInfo{
+                        .intervalMs = intervalMs,
+                        .lastPollTime = 0,
+                        .callback = callback};
 
-                _pollConfig[address] = pollInfo;
-                ESP_LOGI(TAG, "Enabled polling for address 0x%04X with interval %" PRIu32 " ms", address, intervalMs);
+                    _pollConfig[address] = pollInfo;
+                    xSemaphoreGive(_pollConfigMutex);
+                    ESP_LOGI(TAG, "Enabled polling for address 0x%04X with interval %" PRIu32 " ms", address, intervalMs);
+                }
+                else
+                {
+                    ESP_LOGW(TAG, "Failed to enable polling for address 0x%04X: could not obtain mutex", address);
+                }
             }
 
             void ModbusClient::disablePolling(uint16_t address)
             {
-                auto it = _pollConfig.find(address);
-                if (it != _pollConfig.end())
+                if (xSemaphoreTake(_pollConfigMutex, pdMS_TO_TICKS(100)) == pdTRUE)
                 {
-                    _pollConfig.erase(it);
-                    ESP_LOGI(TAG, "Disabled polling for address 0x%04X", address);
+                    auto it = _pollConfig.find(address);
+                    if (it != _pollConfig.end())
+                    {
+                        _pollConfig.erase(it);
+                        xSemaphoreGive(_pollConfigMutex);
+                        ESP_LOGI(TAG, "Disabled polling for address 0x%04X", address);
+                    }
+                    else
+                    {
+                        xSemaphoreGive(_pollConfigMutex);
+                    }
+                }
+                else
+                {
+                    ESP_LOGW(TAG, "Failed to disable polling for address 0x%04X: could not obtain mutex", address);
                 }
             }
 
             void ModbusClient::setPollInterval(uint16_t address, uint32_t intervalMs)
             {
-                auto it = _pollConfig.find(address);
-                if (it != _pollConfig.end())
+                if (xSemaphoreTake(_pollConfigMutex, pdMS_TO_TICKS(100)) == pdTRUE)
                 {
-                    if (intervalMs < ModbusConstants::MIN_POLL_INTERVAL_MS)
+                    auto it = _pollConfig.find(address);
+                    if (it != _pollConfig.end())
                     {
-                        ESP_LOGW(TAG, "Poll interval %" PRIu32 " ms is too small, using minimum %" PRIu32 " ms",
-                                 intervalMs, ModbusConstants::MIN_POLL_INTERVAL_MS);
-                        intervalMs = ModbusConstants::MIN_POLL_INTERVAL_MS;
+                        if (intervalMs < ModbusConstants::MIN_POLL_INTERVAL_MS)
+                        {
+                            ESP_LOGW(TAG, "Poll interval %" PRIu32 " ms is too small, using minimum %" PRIu32 " ms",
+                                     intervalMs, ModbusConstants::MIN_POLL_INTERVAL_MS);
+                            intervalMs = ModbusConstants::MIN_POLL_INTERVAL_MS;
+                        }
+                        it->second.intervalMs = intervalMs;
+                        xSemaphoreGive(_pollConfigMutex);
+                        ESP_LOGI(TAG, "Updated polling interval for address 0x%04X to %" PRIu32 " ms", address, intervalMs);
                     }
-                    it->second.intervalMs = intervalMs;
-                    ESP_LOGI(TAG, "Updated polling interval for address 0x%04X to %" PRIu32 " ms", address, intervalMs);
+                    else
+                    {
+                        xSemaphoreGive(_pollConfigMutex);
+                        ESP_LOGW(TAG, "Cannot set poll interval: address 0x%04X is not configured for polling", address);
+                    }
                 }
                 else
                 {
-                    ESP_LOGW(TAG, "Cannot set poll interval: address 0x%04X is not configured for polling", address);
+                    ESP_LOGW(TAG, "Failed to set polling interval for address 0x%04X: could not obtain mutex", address);
                 }
             }
 
@@ -339,6 +381,56 @@ namespace speed
                         .valid = false};
                     callback(modbusValue);
                 }
+            }
+
+            ModbusValue ModbusClient::pollRegister(uint16_t address)
+            {
+                // Update the last poll time
+                if (xSemaphoreTake(_pollConfigMutex, pdMS_TO_TICKS(100)) == pdTRUE)
+                {
+                    auto it = _pollConfig.find(address);
+                    if (it != _pollConfig.end())
+                    {
+                        it->second.lastPollTime = xTaskGetTickCount();
+                        
+                        // Store the callback locally before releasing the mutex
+                        auto callback = it->second.callback;
+                        xSemaphoreGive(_pollConfigMutex);
+                        
+                        // Perform the actual read operation
+                        bool success = readHoldingRegister(address, callback);
+                        
+                        if (success)
+                        {
+                            // If successful, return the newly cached value
+                            return getCachedValue(address);
+                        }
+                    }
+                    else
+                    {
+                        xSemaphoreGive(_pollConfigMutex);
+                    }
+                }
+                
+                // Return invalid value if the poll failed or the address is not configured
+                return ModbusValue{
+                    .address = address,
+                    .value = 0,
+                    .timestamp = 0,
+                    .valid = false
+                };
+            }
+
+            bool ModbusClient::isPollingEnabled(uint16_t address) const
+            {
+                if (xSemaphoreTake(_pollConfigMutex, pdMS_TO_TICKS(100)) == pdTRUE)
+                {
+                    bool enabled = _pollConfig.find(address) != _pollConfig.end();
+                    xSemaphoreGive(_pollConfigMutex);
+                    return enabled;
+                }
+                
+                return false; // If we couldn't take the mutex, assume polling is disabled
             }
 
         } // namespace modbus

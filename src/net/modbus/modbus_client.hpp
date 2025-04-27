@@ -30,8 +30,11 @@ namespace speed
 
             class ModbusClient
             {
+                private:
+                  struct PollInfo;
             public:
                 ModbusClient(std::shared_ptr<ModbusMaster> master, uint8_t slaveAddress, const std::string &name = "");
+                ~ModbusClient();
 
                 // Device information
                 uint8_t getSlaveAddress() const { return _slaveAddress; }
@@ -55,16 +58,27 @@ namespace speed
                 void clearCache();
                 void setMaxCacheAge(uint32_t maxAgeMs) { _maxCacheAge = maxAgeMs; }
 
-                // Polling configuration
-                void enablePolling(uint16_t address, uint32_t intervalMs, ValueUpdateCallback callback = nullptr);
+                // Polling configuration - modified for centralized polling
+                void enablePolling(uint16_t address, uint32_t intervalMs = 0, ValueUpdateCallback callback = nullptr);
                 void disablePolling(uint16_t address);
                 void setPollInterval(uint16_t address, uint32_t intervalMs);
+                bool isPollingEnabled(uint16_t address) const;
+                const std::map<uint16_t, PollInfo> &getPollConfig() const { return _pollConfig; }
+                ModbusValue pollRegister(uint16_t address); // New method for device manager to poll
 
                 // Value change monitoring
                 void onValueChange(uint16_t address, ValueChangeCallback callback);
                 void removeValueChangeCallback(uint16_t address);
 
             private:
+                // Polling management - simplified for centralized polling
+                struct PollInfo
+                {
+                    uint32_t intervalMs;
+                    uint32_t lastPollTime;
+                    ValueUpdateCallback callback;
+                };
+
                 std::shared_ptr<ModbusMaster> _master;
                 uint8_t _slaveAddress;
                 std::string _name;
@@ -73,14 +87,8 @@ namespace speed
                 std::map<uint16_t, ModbusValue> _cache;
                 uint32_t _maxCacheAge{5000}; // Default 5 seconds
 
-                // Polling management
-                struct PollInfo
-                {
-                    uint32_t intervalMs;
-                    uint32_t lastPollTime;
-                    ValueUpdateCallback callback;
-                };
                 std::map<uint16_t, PollInfo> _pollConfig;
+                SemaphoreHandle_t _pollConfigMutex{nullptr};
 
                 // Value change monitoring
                 std::map<uint16_t, ValueChangeCallback> _changeCallbacks;

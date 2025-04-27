@@ -7,7 +7,7 @@
 #include <core/property.hpp>
 namespace Speed::Communication
 {
-    using namespace Speed::Core;
+    using namespace speed::core;
     template <class TASerialStream, class TBSerialStream>
     class SerialBridge
     {

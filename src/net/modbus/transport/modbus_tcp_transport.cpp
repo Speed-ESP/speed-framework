@@ -4,6 +4,7 @@
 #include <cstring>
 #include <inttypes.h>
 #include <net/modbus/modbus_defs.hpp>
+#include <vector>
 
 #include <net/modbus/transport/modbus_tcp_transport.hpp>
 
@@ -16,8 +17,8 @@ namespace speed
 
             static const char *TAG = "ModbusTcpTransport";
 
-            ModbusTcpTransport::ModbusTcpTransport(const std::string &host, uint16_t port)
-                : _host(host), _port(port), _socket(-1), _connected(false)
+            ModbusTcpTransport::ModbusTcpTransport(const std::string &host, uint16_t port, bool use_header)
+                : _host(host), _port(port), _use_header(use_header), _socket(-1), _connected(false)
             {
                 memset(&_server_addr, 0, sizeof(_server_addr));
             }
@@ -85,7 +86,7 @@ namespace speed
             {
                 if (_connected)
                     return true;
-
+                ESP_LOGD(TAG, "Connecting modbus tcp socket");
                 _socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
                 if (_socket < 0)
                 {
@@ -172,41 +173,52 @@ namespace speed
             bool ModbusTcpTransport::send(const uint8_t *data, size_t length)
             {
                 if (!_connected && !reconnect())
+                {
+                    ESP_LOGD(TAG, "Socket not connected wen trying to send");
                     return false;
+                }
 
                 std::lock_guard<std::mutex> lock(_sendMutex);
-                return sendWithHeader(data, length);
+                return sendModbusTcpPacket(data, length);
             }
 
-            bool ModbusTcpTransport::sendWithHeader(const uint8_t *data, size_t length)
+            bool ModbusTcpTransport::sendModbusTcpPacket(const uint8_t *data, size_t length)
             {
-                std::lock_guard<std::mutex> lock(_sendMutex);
-
-                ModbusTcpHeader header{
-                    .transactionId = _nextTransactionId.fetch_add(1, std::memory_order_relaxed),
-                    .protocolId = ModbusConstants::MODBUS_PROTOCOL_ID,
-                    .length = static_cast<uint16_t>(length + 1), // +1 for unit ID
-                    .unitId = data[0]                            // First byte is slave address
-                };
-
-                // Reset transaction ID if it wraps around to 0
-                if (_nextTransactionId.load(std::memory_order_relaxed) == 0)
-                {
-                    _nextTransactionId.store(1, std::memory_order_relaxed);
-                }
-
-                // Send header
-                if (!send(reinterpret_cast<uint8_t *>(&header), sizeof(header)))
-                {
-                    ESP_LOGE(TAG, "Failed to send TCP header");
-                    return false;
-                }
-
-                // Send PDU (skip first byte as it's already in header.unitId)
-                if (!send(data + 1, length - 1))
-                {
-                    ESP_LOGE(TAG, "Failed to send PDU");
-                    return false;
+                if(_use_header) {
+                    ESP_LOGD(TAG, "Sending with header");
+                    ModbusTcpHeader header{
+                        .transactionId = _nextTransactionId.fetch_add(1, std::memory_order_relaxed),
+                        .protocolId = ModbusConstants::MODBUS_PROTOCOL_ID,
+                        .length = static_cast<uint16_t>(length), // Length of what follows
+                        .unitId = data[0]  // First byte is slave address
+                    };
+    
+                    // Reset transaction ID if it wraps around to 0
+                    if (_nextTransactionId.load(std::memory_order_relaxed) == 0) {
+                        _nextTransactionId.store(1, std::memory_order_relaxed);
+                    }
+    
+                    // Create a combined buffer to send header and data in one operation
+                    std::vector<uint8_t> combined_buffer(sizeof(header) + length - 1); // -1 because we skip the first byte (unit ID)
+                    
+                    // Copy header to the beginning of the buffer
+                    std::memcpy(combined_buffer.data(), &header, sizeof(header));
+                    
+                    // Copy PDU (skip first byte as it's already in header.unitId)
+                    std::memcpy(combined_buffer.data() + sizeof(header), data + 1, length - 1);
+                    
+                    // Send the combined packet in one operation
+                    if (!sendToSocket(combined_buffer.data(), combined_buffer.size())) {
+                        ESP_LOGE(TAG, "Failed to send combined TCP packet");
+                        return false;
+                    }
+                } else {
+                    ESP_LOGD(TAG, "Sending without header");
+                    // Send the entire data buffer without header
+                    if (!sendToSocket(data, length)) {
+                        ESP_LOGE(TAG, "Failed to send data");
+                        return false;
+                    }
                 }
 
                 return true;
@@ -214,56 +226,69 @@ namespace speed
 
             bool ModbusTcpTransport::receive(uint8_t *buffer, size_t expected_length, uint32_t timeout_ms)
             {
-                if (!_connected)
+                if (!_connected && !reconnect())
                     return false;
 
                 std::lock_guard<std::mutex> lock(_receiveMutex);
-                size_t actualLength;
-                if (!receiveWithHeader(buffer, actualLength, timeout_ms))
+                size_t actualLength = expected_length;
+                if (!receiveModbusTcpPackage(buffer, actualLength, timeout_ms))
                 {
                     return false;
                 }
 
+                // When not using headers, we'll directly get the exact length we requested
+                if (!_use_header) {
+                    return true;
+                }
+                
+                // When using headers, verify that the actual length matches what we expected
                 return actualLength == expected_length;
             }
 
-            bool ModbusTcpTransport::receiveWithHeader(uint8_t *buffer, size_t &length, uint32_t timeout_ms)
+            bool ModbusTcpTransport::receiveModbusTcpPackage(uint8_t *buffer, size_t &length, uint32_t timeout_ms)
             {
-                std::lock_guard<std::mutex> lock(_receiveMutex);
-
-                ModbusTcpHeader header;
-                if (!receive(reinterpret_cast<uint8_t *>(&header), sizeof(header), timeout_ms))
-                {
-                    ESP_LOGE(TAG, "Failed to receive TCP header");
-                    return false;
+                if (_use_header) {
+                    ModbusTcpHeader header;
+                    if (!receiveFromSocket(reinterpret_cast<uint8_t *>(&header), sizeof(header), timeout_ms))
+                    {
+                        ESP_LOGE(TAG, "Failed to receive TCP header");
+                        return false;
+                    }
+    
+                    // Validate protocol ID
+                    if (header.protocolId != ModbusConstants::MODBUS_PROTOCOL_ID)
+                    {
+                        ESP_LOGE(TAG, "Invalid protocol ID: %d", header.protocolId);
+                        return false;
+                    }
+    
+                    // Calculate PDU length
+                    size_t pduLength = header.length - 1; // -1 for unit ID
+                    if (pduLength > length)
+                    {
+                        ESP_LOGE(TAG, "Response too large for buffer");
+                        return false;
+                    }
+    
+                    // Copy unit ID to first byte of buffer
+                    buffer[0] = header.unitId;
+    
+                    // Receive PDU
+                    if (!receiveFromSocket(buffer + 1, pduLength, timeout_ms))
+                    {
+                        ESP_LOGE(TAG, "Failed to receive PDU");
+                        return false;
+                    }
+    
+                    length = pduLength + 1; // +1 for unit ID
+                } else {
+                    // No header mode - directly receive the expected data
+                    if (!receiveFromSocket(buffer, length, timeout_ms))
+                    {
+                        ESP_LOGE(TAG, "Failed to receive data without header");
+                        return false;
+                    }
                 }
-
-                // Validate protocol ID
-                if (header.protocolId != ModbusConstants::MODBUS_PROTOCOL_ID)
-                {
-                    ESP_LOGE(TAG, "Invalid protocol ID: %d", header.protocolId);
-                    return false;
-                }
-
-                // Calculate PDU length
-                size_t pduLength = header.length - 1; // -1 for unit ID
-                if (pduLength > length)
-                {
-                    ESP_LOGE(TAG, "Response too large for buffer");
-                    return false;
-                }
-
-                // Copy unit ID to first byte of buffer
-                buffer[0] = header.unitId;
-
-                // Receive PDU
-                if (!receive(buffer + 1, pduLength, timeout_ms))
-                {
-                    ESP_LOGE(TAG, "Failed to receive PDU");
-                    return false;
-                }
-
-                length = pduLength + 1; // +1 for unit ID
                 return true;
             }
 
@@ -284,6 +309,91 @@ namespace speed
                 }
 
                 fcntl(_socket, F_SETFL, flags);
+            }
+
+            bool ModbusTcpTransport::sendToSocket(const uint8_t *data, size_t length)
+            {
+                if (!_connected)
+                {
+                    return false;
+                }
+
+                size_t bytes_sent = 0;
+                while (bytes_sent < length)
+                {
+                    int ret = ::send(_socket, data + bytes_sent, length - bytes_sent, 0);
+                    if (ret < 0)
+                    {
+                        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+                        return false;
+                    }
+                    bytes_sent += ret;
+                }
+                return true;
+            }
+
+            bool ModbusTcpTransport::receiveFromSocket(uint8_t *buffer, size_t length, uint32_t timeout_ms)
+            {
+                if (!_connected)
+                {
+                    return false;
+                }
+
+                struct timeval original_timeout;
+                socklen_t len = sizeof(original_timeout);
+                // Save original timeout
+                if (getsockopt(_socket, SOL_SOCKET, SO_RCVTIMEO, &original_timeout, &len) < 0)
+                {
+                    ESP_LOGW(TAG, "Failed to get socket timeout, using default");
+                }
+
+                // Set new timeout if different from default
+                if (timeout_ms != _connectionTimeout)
+                {
+                    struct timeval timeout;
+                    timeout.tv_sec = timeout_ms / 1000;
+                    timeout.tv_usec = (timeout_ms % 1000) * 1000;
+                    if (setsockopt(_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0)
+                    {
+                        ESP_LOGW(TAG, "Failed to set receive timeout for this operation");
+                    }
+                }
+
+                size_t bytes_received = 0;
+                while (bytes_received < length)
+                {
+                    int ret = ::recv(_socket, buffer + bytes_received, length - bytes_received, 0);
+                    if (ret < 0)
+                    {
+                        ESP_LOGE(TAG, "Error occurred during receiving: errno %d", errno);
+                        // Restore original timeout if we changed it
+                        if (timeout_ms != _connectionTimeout)
+                        {
+                            setsockopt(_socket, SOL_SOCKET, SO_RCVTIMEO, &original_timeout, len);
+                        }
+                        return false;
+                    }
+                    else if (ret == 0)
+                    {
+                        ESP_LOGW(TAG, "Connection closed by peer");
+                        // Restore original timeout if we changed it
+                        if (timeout_ms != _connectionTimeout)
+                        {
+                            setsockopt(_socket, SOL_SOCKET, SO_RCVTIMEO, &original_timeout, len);
+                        }
+                        _connected = false;
+                        return false;
+                    }
+                    bytes_received += ret;
+                }
+
+                // Restore original timeout if we changed it
+                if (timeout_ms != _connectionTimeout)
+                {
+                    setsockopt(_socket, SOL_SOCKET, SO_RCVTIMEO, &original_timeout, len);
+                }
+
+                return true;
             }
 
         } // namespace modbus

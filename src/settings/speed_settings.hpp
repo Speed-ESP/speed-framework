@@ -16,21 +16,21 @@
 #include "nvs_handle.hpp"
 
 #include <core/singleton_service.hpp>
-namespace Speed::Settings
+
+using namespace speed::core;
+namespace speed::settings
 {
-    using namespace Speed::Core;
+    class SpeedSettings;
     constexpr const char *TAG_SETTINGS = "SPEED-SETTINGS";
     class SpeedSettings : SingletonService<SpeedSettings>
     {
     private:
-        std::string_view ns_name;
-        inline static bool initiated = false;
+       std::string_view ns_name = "speed_app";
 
     protected:
         void init() override
         {
             ESP_LOGI(TAG_SETTINGS, "Initializing NVS");
-            initiated = true;
             esp_err_t err = nvs_flash_init();
             if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
             {
@@ -44,16 +44,15 @@ namespace Speed::Settings
         }
 
     public:
-        static SpeedSettings &setup(std::string_view ns_name = "storage")
+        static SpeedSettings &setup()
         {
-            if (initiated)
-            {
-                ESP_LOGW(TAG_SETTINGS, "Settings already initialized");
-                return get();
-            }
-            SpeedSettings &instance = get();
-            instance.ns_name = ns_name;
-            return instance;
+            return get();
+        }
+
+        SpeedSettings& configure( std::string_view ns_name = "storage")
+        {
+            this->ns_name = ns_name;
+            return get();
         }
 
         template <typename TItem>

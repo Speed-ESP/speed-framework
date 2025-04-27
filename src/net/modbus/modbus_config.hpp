@@ -8,9 +8,9 @@ namespace speed
         {
             struct ModbusConfig
             {
-                static constexpr int16_t DEFAULT_STACK_SIZE = 4096;
+                static constexpr int16_t DEFAULT_STACK_SIZE = 4096 * 2;
                 static constexpr uint32_t DEFAULT_TASK_PRIORITY = 5;
-                static constexpr uint32_t DEFAULT_QUEUE_SIZE = 10;
+                static constexpr uint32_t DEFAULT_QUEUE_SIZE = 100;
                 static constexpr uint32_t DEFAULT_UART_BUFFER_SIZE = 1024;
                 static constexpr uint32_t DEFAULT_RESPONSE_TIMEOUT_MS = 1000;
                 static constexpr uint32_t DEFAULT_QUEUE_TIMEOUT_MS = 100;

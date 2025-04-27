@@ -72,7 +72,7 @@ static auto bounce(void *priv, Params... params) -> decltype(((*reinterpret_cast
 namespace Speed::BLE
 {
 
-    using namespace Speed::Core;
+    using namespace speed::core;
     class SpeedBLE;
 
     class GattObject

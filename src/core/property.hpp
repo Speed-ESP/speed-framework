@@ -2,7 +2,7 @@
 #define __PROPERTY_H__
 
 #include <functional>
-namespace Speed::Core
+namespace speed::core
 {
     template <class T>
     class Property
@@ -38,6 +38,6 @@ namespace Speed::Core
         operator T() const { return _get(); }
     }; // class ReadOnlyProperty
 
-} // namespace Speed::Core
+} // namespace speed::core
 
 #endif // __PROPERTY_H__

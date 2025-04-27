@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <vector>
 #include <memory>
+#include <atomic>
 #include <map>
 #include <mutex>
 #include "freertos/FreeRTOS.h"
@@ -60,7 +61,7 @@ namespace speed
                 TaskHandle_t _taskHandle;
                 QueueHandle_t _requestQueue;
                 ModbusCallback _globalCallback;
-                bool _running;
+                std::atomic<bool> _running{false};
                 ModbusConfig _config;
                 ModbusStatistics _statistics;
                 std::map<uint16_t, ModbusTransaction> _pendingTransactions;

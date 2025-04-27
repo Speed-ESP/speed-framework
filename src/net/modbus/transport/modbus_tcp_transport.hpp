@@ -4,6 +4,7 @@
 #include <string>
 #include <mutex>
 #include <atomic>
+#include <vector>
 #include <net/modbus/transport/modbus_transport.hpp>
 #include <net/modbus/modbus_defs.hpp>
 #include "lwip/sockets.h"
@@ -25,24 +26,25 @@ namespace speed
             class ModbusTcpTransport : public ModbusTransport
             {
             public:
-                ModbusTcpTransport(const std::string &host, uint16_t port);
+                ModbusTcpTransport(const std::string &host, uint16_t port, bool use_header = false);
                 ~ModbusTcpTransport();
 
                 bool begin() override;
                 void stop() override;
                 bool isConnected() override;
 
+                // Legacy methods with raw pointers
                 bool send(const uint8_t *data, size_t length) override;
                 bool receive(uint8_t *buffer, size_t expected_length, uint32_t timeout_ms) override;
+                
                 void flush() override;
-                ModbusTransportType getType() const override { return ModbusTransportType::TCP; }
 
                 // Frame length calculation methods
                 size_t getHeaderSize() const override { return ModbusConstants::TCP_HEADER_SIZE; }
                 size_t getFooterSize() const override { return 0; } // TCP doesn't use CRC
                 
                 size_t calculateFrameLength(size_t pduLength) const override { 
-                    return getHeaderSize() + pduLength;
+                    return _use_header ? getHeaderSize() + pduLength : pduLength;
                 }
                 
                 size_t getExceptionResponseLength() const override { 
@@ -57,12 +59,17 @@ namespace speed
                 bool connect();
                 void disconnect();
                 bool reconnect();
-                bool sendWithHeader(const uint8_t *data, size_t length);
-                bool receiveWithHeader(uint8_t *buffer, size_t &length, uint32_t timeout_ms);
+                bool sendModbusTcpPacket(const uint8_t *data, size_t length);
+                bool receiveModbusTcpPackage(uint8_t *buffer, size_t &length, uint32_t timeout_ms);
                 bool setSocketOptions();
+                
+                // Direct socket operations
+                bool sendToSocket(const uint8_t *data, size_t length);
+                bool receiveFromSocket(uint8_t *buffer, size_t length, uint32_t timeout_ms);
 
                 std::string _host;
                 uint16_t _port;
+                bool _use_header;
                 int _socket;
                 bool _connected;
                 struct sockaddr_in _server_addr;
