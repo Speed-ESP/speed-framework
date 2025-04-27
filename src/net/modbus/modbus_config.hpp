@@ -1,11 +1,16 @@
 #pragma once
 
+#include <memory>
+
 namespace speed
 {
     namespace net
     {
         namespace modbus
         {
+            // Forward declaration
+            class ModbusPackager;
+
             struct ModbusConfig
             {
                 static constexpr int16_t DEFAULT_STACK_SIZE = 4096 * 2;
@@ -23,6 +28,9 @@ namespace speed
                 uint32_t responseTimeoutMs = DEFAULT_RESPONSE_TIMEOUT_MS;
                 uint32_t queueTimeoutMs = DEFAULT_QUEUE_TIMEOUT_MS;
                 uint32_t readIntervalMs = DEFAULT_READ_INTERVAL_MS;
+                
+                // Custom packager to use (if null, a default packager will be created based on transport type)
+                std::shared_ptr<ModbusPackager> packager = nullptr;
             };
 
         } // namespace modbus

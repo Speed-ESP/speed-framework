@@ -15,10 +15,13 @@ namespace speed
             static const char *TAG = "ModbusMaster";
 
             ModbusMaster::ModbusMaster(std::shared_ptr<ModbusTransport> transport, const ModbusConfig &config)
-                : _transport(transport), _taskHandle(nullptr), _requestQueue(nullptr),
+                : _transport(transport), _packager(nullptr), _taskHandle(nullptr), _requestQueue(nullptr),
                   _globalCallback(nullptr), _running(false), _config(config)
             {
                 _transactionSemaphore = xSemaphoreCreateMutex();
+                
+                // Initialize the default packager for this transport
+                initializeDefaultPackager();
             }
 
             ModbusMaster::~ModbusMaster()
@@ -317,20 +320,16 @@ namespace speed
             bool ModbusMaster::processRequest(ModbusTransaction &transaction)
             {
                 ESP_LOGD(TAG,"Processing request id: %d, to device: %d", transaction.transactionId, transaction.slaveAddr);
+                
+                // Use the packager to format the request
                 std::vector<uint8_t> requestData;
-                requestData.push_back(transaction.slaveAddr);
-                requestData.push_back(static_cast<uint8_t>(transaction.function));
-                requestData.push_back(transaction.startAddress >> 8);
-                requestData.push_back(transaction.startAddress & 0xFF);
-                requestData.push_back(transaction.quantity >> 8);
-                requestData.push_back(transaction.quantity & 0xFF);
-
-                // Add additional data for write operations
-                requestData.insert(requestData.end(), transaction.data.begin(), transaction.data.end());
-
-                uint16_t crc = calculateCRC(requestData.data(), requestData.size());
-                requestData.push_back(crc & 0xFF);
-                requestData.push_back(crc >> 8);
+                if (!_packager->packageRequest(transaction, requestData))
+                {
+                    ESP_LOGE(TAG, "Failed to package request");
+                    transaction.status = TransactionStatus::InvalidResponse;
+                    updateStatistics(transaction);
+                    return false;
+                }
 
                 _transport->flush();
                 if (!_transport->send(requestData.data(), requestData.size()))
@@ -344,10 +343,10 @@ namespace speed
                 _statistics.messagesSent++;
 
                 // Calculate expected response length based on function code
-                size_t expectedLength = calculateExpectedResponseLength(transaction);
-                std::vector<uint8_t> response(expectedLength);
+                size_t expectedLength = _packager->calculateExpectedResponseLength(transaction);
+                std::vector<uint8_t> responseData(expectedLength);
 
-                if (!_transport->receive(response.data(), expectedLength, _config.responseTimeoutMs))
+                if (!_transport->receive(responseData.data(), expectedLength, _config.responseTimeoutMs))
                 {
                     ESP_LOGE(TAG, "Failed to receive response");
                     transaction.status = TransactionStatus::Timeout;
@@ -357,31 +356,21 @@ namespace speed
 
                 _statistics.messagesReceived++;
 
-                // Check for Modbus exception response
-                if ((response[1] & 0x80) == 0x80)
+                // Parse response using the packager
+                if (!_packager->parseResponse(responseData, transaction))
                 {
-                    return handleModbusException(response[2], transaction);
-                }
-
-                // Validate CRC
-                uint16_t respCRC = (response[expectedLength - 1] << 8) | response[expectedLength - 2];
-                uint16_t calcCRC = calculateCRC(response.data(), expectedLength - 2);
-                if (respCRC != calcCRC)
-                {
-                    ESP_LOGE(TAG, "CRC mismatch: received 0x%" PRIX16 ", calculated 0x%" PRIX16, respCRC, calcCRC);
-                    transaction.status = TransactionStatus::CrcError;
+                    ESP_LOGE(TAG, "Failed to parse response");
+                    transaction.status = TransactionStatus::InvalidResponse;
                     updateStatistics(transaction);
                     return retryTransaction(transaction);
                 }
 
-                transaction.status = TransactionStatus::Success;
-                transaction.data = response;
                 updateStatistics(transaction);
 
                 // Execute callbacks
                 if (_globalCallback)
                 {
-                    _globalCallback(transaction.slaveAddr, transaction.function, response, transaction.status);
+                    _globalCallback(transaction.slaveAddr, transaction.function, transaction.data, transaction.status);
                 }
 
                 {
@@ -391,7 +380,7 @@ namespace speed
                     {
                         if (it->second.callback)
                         {
-                            it->second.callback(transaction.slaveAddr, transaction.function, response, transaction.status);
+                            it->second.callback(transaction.slaveAddr, transaction.function, transaction.data, transaction.status);
                         }
                         _pendingTransactions.erase(it);
                     }
@@ -513,58 +502,8 @@ namespace speed
 
             size_t ModbusMaster::calculateExpectedResponseLength(const ModbusTransaction &transaction) const
             {
-                // Check for exception response first
-                if (transaction.data.size() >= 2 && (transaction.data[1] & 0x80))
-                {
-                    return _transport->getExceptionResponseLength();
-                }
-
-                // Calculate PDU length based on function code (transport-agnostic)
-                size_t pduLength = 1; // Function code
-                switch (transaction.function)
-                {
-                case ModbusFunction::ReadCoils:
-                case ModbusFunction::ReadDiscreteInputs:
-                    // Byte count + data bytes (8 coils per byte, rounded up)
-                    pduLength += 1 + ((transaction.quantity + 7) / 8);
-                    break;
-
-                case ModbusFunction::ReadHoldingRegisters:
-                case ModbusFunction::ReadInputRegisters:
-                    // Byte count + data bytes (2 bytes per register)
-                    pduLength += 1 + (transaction.quantity * 2);
-                    break;
-
-                case ModbusFunction::WriteSingleCoil:
-                case ModbusFunction::WriteSingleRegister:
-                    // Address + value
-                    pduLength += 4;
-                    break;
-
-                case ModbusFunction::WriteMultipleCoils:
-                case ModbusFunction::WriteMultipleRegisters:
-                    // Address + quantity
-                    pduLength += 4;
-                    break;
-
-                case ModbusFunction::ReadWriteMultipleRegisters:
-                    // Byte count + read data bytes
-                    pduLength += 1 + (transaction.quantity * 2);
-                    break;
-
-                case ModbusFunction::Diagnostics:
-                    // Sub-function + data
-                    pduLength += transaction.data.size();
-                    break;
-
-                default:
-                    // Unknown function code, use minimum response size
-                    pduLength += 1;
-                    break;
-                }
-
-                // Let the transport calculate the total frame length
-                return _transport->calculateFrameLength(pduLength);
+                // Delegate to the packager to calculate the expected response length
+                return _packager->calculateExpectedResponseLength(transaction);
             }
 
             bool ModbusMaster::handleModbusException(uint8_t exceptionCode, ModbusTransaction &transaction)
@@ -608,6 +547,34 @@ namespace speed
             {
                 // Use the shared CRC calculation utility
                 return utils::calculateCRC(data, length);
+            }
+
+            void ModbusMaster::setPackager(std::shared_ptr<ModbusPackager> packager)
+            {
+                if (!packager) {
+                    ESP_LOGE(TAG, "Cannot set null packager");
+                    return;
+                }
+                
+                _packager = packager;
+                ESP_LOGI(TAG, "Packager changed");
+            }
+
+            void ModbusMaster::initializeDefaultPackager()
+            {
+                // If a packager was provided in the config, use it
+                if (_config.packager) {
+                    ESP_LOGI(TAG, "Using packager from config");
+                    _packager = _config.packager;
+                    return;
+                }
+                
+                // Otherwise, create a default packager based on transport type
+                // We'll check if this is a TCP transport by checking for a specific header size
+                bool isTcpTransport = (_transport->getHeaderSize() == ModbusConstants::TCP_HEADER_SIZE);
+                
+                _packager = ModbusPackagerFactory::createDefaultPackager(!isTcpTransport);
+                ESP_LOGI(TAG, "Created default %s packager", isTcpTransport ? "MBAP" : "RTU");
             }
 
         } // namespace modbus

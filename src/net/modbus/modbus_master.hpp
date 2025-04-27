@@ -16,7 +16,8 @@
 #include <net/modbus/modbus_config.hpp>
 #include <net/modbus/modbus_defs.hpp>
 #include <net/modbus/transport/modbus_transport.hpp>
-
+#include <net/modbus/packager/modbus_packager.hpp>
+#include <net/modbus/packager/modbus_packager_factory.hpp>
 
 namespace speed
 {
@@ -50,6 +51,10 @@ namespace speed
                                  uint16_t quantity, const std::vector<uint8_t> &data = std::vector<uint8_t>(),
                                  ModbusCallback callback = nullptr);
 
+                // Packager management
+                void setPackager(std::shared_ptr<ModbusPackager> packager);
+                std::shared_ptr<ModbusPackager> getPackager() const { return _packager; }
+
                 // Diagnostics and management
                 const ModbusStatistics &getStatistics() const { return _statistics; }
                 void resetStatistics() { _statistics.reset(); }
@@ -58,6 +63,7 @@ namespace speed
 
             private:
                 std::shared_ptr<ModbusTransport> _transport;
+                std::shared_ptr<ModbusPackager> _packager;
                 TaskHandle_t _taskHandle;
                 QueueHandle_t _requestQueue;
                 ModbusCallback _globalCallback;
@@ -79,6 +85,7 @@ namespace speed
                 bool retryTransaction(ModbusTransaction &transaction);
                 void updateStatistics(const ModbusTransaction &transaction);
                 size_t calculateExpectedResponseLength(const ModbusTransaction &transaction) const;
+                void initializeDefaultPackager();
             };
 
         } // namespace modbus

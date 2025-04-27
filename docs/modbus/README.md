@@ -9,8 +9,12 @@ graph TD
     A[Application] --> B[ModbusDeviceManager]
     B --> C[ModbusMaster]
     C --> D[ModbusTransport]
+    C --> P[ModbusPackager]
     D --> E[TCP Transport]
     D --> F[RTU Transport]
+    P --> M[MBAP Packager]
+    P --> R[RTU Packager] 
+    P --> S[ASCII Packager]
     
     subgraph "Device Management"
         B --- G[Device 1]
@@ -22,6 +26,12 @@ graph TD
         E --- J[TCP Socket]
         F --- K[UART/RS-485]
     end
+    
+    subgraph "Protocol Formatters"
+        M --- TCP
+        R --- Binary
+        S --- Text
+    end
 ```
 
 ## Features
@@ -30,6 +40,12 @@ graph TD
   - Modbus TCP with automatic reconnection
   - Modbus RTU over UART/RS-485
   - Configurable timing parameters
+
+- **Flexible Protocol Formats**
+  - MBAP (Modbus TCP) format
+  - RTU (binary with CRC) format
+  - ASCII (text with LRC) format
+  - Mix and match transports with packagers
 
 - **Device Management**
   - Automatic device discovery
@@ -49,7 +65,7 @@ graph TD
 // Create TCP transport
 auto transport = std::make_shared<ModbusTcpTransport>("192.168.1.100", 502);
 
-// Configure master
+// Configure master (uses MBAP packager by default for TCP)
 ModbusConfig config;
 config.responseTimeoutMs = 2000;
 config.queueSize = 32;
@@ -73,11 +89,13 @@ device->enablePolling(0x0100, 1000, [](const ModbusValue& value) {
 - [TCP Mode](tcp_mode.md) - TCP-specific features and configurations
 - [RTU Mode](rtu_mode.md) - RTU/Serial communication details
 - [Device Management](device_management.md) - Working with multiple devices
+- [Packager System](packager_system.md) - Flexible protocol formatting
 - [Advanced Features](advanced_features.md) - Caching, polling, and more
 
 ## Examples
 
 - [Simple Master](../examples/modbus-master/modbus_master_example.cpp)
+- [Packager Example](../examples/modbus-master/modbus_packager_example.cpp)
 - [SRNE Solar Controller Client](../examples/srne-modbus/modbus_client.cpp)
 
 ## Performance
@@ -109,17 +127,23 @@ The library provides comprehensive error handling:
    - Use RTU for direct serial connections
    - Consider latency requirements
 
-2. **Performance Optimization**
+2. **Packager Selection**
+   - Use MBAP for TCP/IP communications
+   - Use RTU for binary serial connections
+   - Use ASCII for text-only systems
+   - Choose appropriate packager for your device's protocol
+
+3. **Performance Optimization**
    - Enable value caching for frequently read values
    - Use batch operations for multiple registers
    - Configure appropriate timeout values
 
-3. **Error Handling**
+4. **Error Handling**
    - Implement retry logic for unreliable networks
    - Monitor device connection status
    - Log and handle device exceptions
 
-4. **Resource Management**
+5. **Resource Management**
    - Configure appropriate queue sizes
    - Monitor memory usage
    - Clean up resources properly
