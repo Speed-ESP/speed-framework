@@ -7,6 +7,8 @@ This guide covers TCP-specific configuration and usage of the Speed Framework Mo
 ```mermaid
 graph TB
     A[ModbusMaster] --> B[ModbusTcpTransport]
+    B -->|Provides| P[MBAP Packager]
+    A -->|Uses| P
     B --> C[TCP Socket]
     B --> D[Transaction ID Manager]
     C --> E[Ethernet/WiFi]

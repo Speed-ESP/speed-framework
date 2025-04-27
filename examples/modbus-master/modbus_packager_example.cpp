@@ -17,109 +17,70 @@ static const char* TAG = "ModbusPackagerExample";
  * transport layers (TCP, UART).
  */
 void modbus_packager_example() {
-    // Example 1: TCP transport with MBAP packager (standard combination)
-    // ---------------------------------------------------------------
-    // Create TCP transport
-    auto tcpTransport = std::make_shared<ModbusTcpTransport>("192.168.1.100", 502);
+    // Example 1: Using default packager (simple approach)
+    // ------------------------------------------------
+    // Each transport provides its appropriate default packager
     
-    // Create MBAP packager (standard for TCP)
-    auto mbapPackager = ModbusPackagerFactory::createMbapPackager();
+    // TCP transport automatically provides MBAP packager
+    auto defaultTcpTransport = std::make_shared<ModbusTcpTransport>("192.168.1.100", 502);
+    auto defaultTcpMaster = std::make_shared<ModbusMaster>(defaultTcpTransport);
     
-    // Set up configuration with packager
-    ModbusConfig tcpConfig;
-    tcpConfig.packager = mbapPackager;
-    
-    // Create master with packager
-    auto tcpMaster = std::make_shared<ModbusMaster>(tcpTransport, tcpConfig);
-    if (!tcpMaster->begin()) {
-        ESP_LOGE(TAG, "Failed to initialize TCP master");
-        return;
-    }
-    
-    // Example 2: UART transport with RTU packager (standard combination)
-    // ---------------------------------------------------------------
-    // Create UART transport
-    auto uartTransport = std::make_shared<ModbusUartTransport>(
+    // UART transport automatically provides RTU packager
+    auto defaultUartTransport = std::make_shared<ModbusUartTransport>(
         UART_NUM_1, 
         GPIO_NUM_17,   // TX pin
         GPIO_NUM_16,   // RX pin
         std::make_shared<RtuUartConfig>()
     );
+    auto defaultUartMaster = std::make_shared<ModbusMaster>(defaultUartTransport);
     
-    // Create RTU packager (standard for UART)
-    auto rtuPackager = ModbusPackagerFactory::createRtuPackager();
+    ESP_LOGI(TAG, "Default packagers demonstrate the simplest approach");
     
-    // Set up configuration with packager
-    ModbusConfig rtuConfig;
-    rtuConfig.packager = rtuPackager;
+    // Example 2: TCP transport with custom packager (ASCII instead of MBAP)
+    // ---------------------------------------------------------------
+    auto tcpTransport = std::make_shared<ModbusTcpTransport>("192.168.1.101", 502);
     
-    // Create master with packager
-    auto rtuMaster = std::make_shared<ModbusMaster>(uartTransport, rtuConfig);
-    if (!rtuMaster->begin()) {
-        ESP_LOGE(TAG, "Failed to initialize RTU master");
+    // Create ASCII packager (non-standard for TCP)
+    auto asciiPackager = ModbusPackagerFactory::createAsciiPackager();
+    
+    // Set up configuration with custom packager
+    ModbusConfig tcpConfig;
+    tcpConfig.packager = asciiPackager;
+    
+    // Create master with custom packager
+    auto tcpMaster = std::make_shared<ModbusMaster>(tcpTransport, tcpConfig);
+    if (!tcpMaster->begin()) {
+        ESP_LOGE(TAG, "Failed to initialize TCP master with ASCII packager");
         return;
     }
     
-    // Example 3: UART transport with ASCII packager (non-standard but valid combination)
-    // -----------------------------------------------------------------------------
-    // Create UART transport (same as above)
-    auto asciiUartTransport = std::make_shared<ModbusUartTransport>(
+    // Example 3: UART transport with custom packager (MBAP instead of RTU)
+    // ---------------------------------------------------------------
+    auto uartTransport = std::make_shared<ModbusUartTransport>(
         UART_NUM_2, 
         GPIO_NUM_18,   // TX pin
         GPIO_NUM_19,   // RX pin
         std::make_shared<UartConfig>()
     );
     
-    // Create ASCII packager - less common but supported
-    auto asciiPackager = ModbusPackagerFactory::createAsciiPackager();
+    // Create MBAP packager (non-standard for UART)
+    auto mbapPackager = ModbusPackagerFactory::createMbapPackager();
     
     // Set up configuration with packager
-    ModbusConfig asciiConfig;
-    asciiConfig.packager = asciiPackager;
+    ModbusConfig mbapConfig;
+    mbapConfig.packager = mbapPackager;
     
-    // Create master with packager
-    auto asciiMaster = std::make_shared<ModbusMaster>(asciiUartTransport, asciiConfig);
-    if (!asciiMaster->begin()) {
-        ESP_LOGE(TAG, "Failed to initialize ASCII master");
+    // Create master with custom packager
+    auto mbapMaster = std::make_shared<ModbusMaster>(uartTransport, mbapConfig);
+    if (!mbapMaster->begin()) {
+        ESP_LOGE(TAG, "Failed to initialize UART master with MBAP packager");
         return;
     }
     
-    // Example 4: TCP transport with RTU packager (unusual combination)
-    // -------------------------------------------------------------
-    // This demonstrates the flexibility of separating transport from packager
-    auto tcpTransport2 = std::make_shared<ModbusTcpTransport>("192.168.1.101", 502);
-    
-    // Use RTU packager with TCP transport
-    ModbusConfig tcpRtuConfig;
-    tcpRtuConfig.packager = ModbusPackagerFactory::createRtuPackager();
-    
-    // Create master with unusual combination
-    auto tcpRtuMaster = std::make_shared<ModbusMaster>(tcpTransport2, tcpRtuConfig);
-    if (!tcpRtuMaster->begin()) {
-        ESP_LOGE(TAG, "Failed to initialize TCP+RTU master");
-        return;
-    }
-    
-    // Example 5: Changing packager at runtime
+    // Example 4: Changing packager at runtime
     // ------------------------------------
-    // You can also change the packager at runtime if needed
-    ESP_LOGI(TAG, "Changing packager from RTU to ASCII");
-    tcpRtuMaster->setPackager(ModbusPackagerFactory::createAsciiPackager());
-    
-    // Example 6: Using default packagers (simplified approach)
-    // ---------------------------------------------------
-    // Let the system choose default packagers based on transport type
-    auto defaultTcpTransport = std::make_shared<ModbusTcpTransport>("192.168.1.102", 502);
-    auto defaultUartTransport = std::make_shared<ModbusUartTransport>(
-        UART_NUM_1, 
-        GPIO_NUM_21,   // TX pin
-        GPIO_NUM_22,   // RX pin
-        std::make_shared<UartConfig>()
-    );
-    
-    // Create masters without specifying packagers
-    auto defaultTcpMaster = std::make_shared<ModbusMaster>(defaultTcpTransport);  // Will use MBAP by default
-    auto defaultUartMaster = std::make_shared<ModbusMaster>(defaultUartTransport); // Will use RTU by default
+    ESP_LOGI(TAG, "Changing packager at runtime");
+    tcpMaster->setPackager(ModbusPackagerFactory::createRtuPackager());
     
     // For communication, use these masters as normal
     ESP_LOGI(TAG, "Modbus packager example complete");

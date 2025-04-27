@@ -1,6 +1,6 @@
 # Modbus Packager System
 
-The Speed Framework Modbus library now supports a flexible packaging system that separates the protocol formatting (packager) from the transport layer. This allows for greater flexibility in how Modbus messages are formatted and parsed, independent of the transport medium used.
+The Speed Framework Modbus library supports a flexible packaging system that separates the protocol formatting (packager) from the transport layer. This allows for greater flexibility in how Modbus messages are formatted and parsed, independent of the transport medium used.
 
 ## Packager Types
 
@@ -21,13 +21,13 @@ The library supports three packager types:
 
 ### Default Behavior
 
-By default, the system will automatically select the appropriate packager based on the transport type:
+Each transport type automatically provides its most appropriate packager:
 
-- TCP transports will use MBAP packager
-- UART transports will use RTU packager
+- TCP transports will provide MBAP packager
+- UART transports will provide RTU packager
 
 ```cpp
-// Let the system choose the default packager
+// Let the transport choose the default packager
 auto tcpTransport = std::make_shared<ModbusTcpTransport>("192.168.1.100", 502);
 auto tcpMaster = std::make_shared<ModbusMaster>(tcpTransport);  // Uses MBAP by default
 
@@ -37,13 +37,13 @@ auto rtuMaster = std::make_shared<ModbusMaster>(uartTransport); // Uses RTU by d
 
 ### Explicit Packager Selection
 
-You can explicitly specify a packager in the ModbusConfig:
+You can explicitly specify a custom packager in the ModbusConfig when you need non-standard behavior:
 
 ```cpp
-// Create a packager
+// Create a custom packager
 auto asciiPackager = ModbusPackagerFactory::createAsciiPackager();
 
-// Configure and create master with packager
+// Configure and create master with custom packager
 ModbusConfig config;
 config.packager = asciiPackager;
 auto master = std::make_shared<ModbusMaster>(transport, config);
@@ -54,7 +54,7 @@ auto master = std::make_shared<ModbusMaster>(transport, config);
 You can change the packager at runtime:
 
 ```cpp
-// Switch from default packager to ASCII packager
+// Switch to ASCII packager
 master->setPackager(ModbusPackagerFactory::createAsciiPackager());
 
 // Switch to RTU packager

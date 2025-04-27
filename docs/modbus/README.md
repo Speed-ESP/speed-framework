@@ -1,6 +1,6 @@
 # Speed Framework Modbus Library
 
-A comprehensive Modbus implementation for ESP32, supporting both TCP and RTU modes with advanced features like automatic polling, value caching, and device management.
+A comprehensive Modbus implementation for ESP32, supporting both TCP and RTU modes with advanced features like automatic polling, value caching, device management, and flexible packager system.
 
 ## Architecture
 
@@ -9,12 +9,9 @@ graph TD
     A[Application] --> B[ModbusDeviceManager]
     B --> C[ModbusMaster]
     C --> D[ModbusTransport]
-    C --> P[ModbusPackager]
+    C --- P[ModbusPackager]
     D --> E[TCP Transport]
     D --> F[RTU Transport]
-    P --> M[MBAP Packager]
-    P --> R[RTU Packager] 
-    P --> S[ASCII Packager]
     
     subgraph "Device Management"
         B --- G[Device 1]
@@ -28,9 +25,9 @@ graph TD
     end
     
     subgraph "Protocol Formatters"
-        M --- TCP
-        R --- Binary
-        S --- Text
+        E -->|Default| M[MBAP Packager]
+        F -->|Default| R[RTU Packager] 
+        P --- S[ASCII Packager]
     end
 ```
 
@@ -45,7 +42,8 @@ graph TD
   - MBAP (Modbus TCP) format
   - RTU (binary with CRC) format
   - ASCII (text with LRC) format
-  - Mix and match transports with packagers
+  - Each transport provides its appropriate default packager
+  - Mix and match transports with custom packagers if needed
 
 - **Device Management**
   - Automatic device discovery
@@ -65,7 +63,7 @@ graph TD
 // Create TCP transport
 auto transport = std::make_shared<ModbusTcpTransport>("192.168.1.100", 502);
 
-// Configure master (uses MBAP packager by default for TCP)
+// Configure master (uses transport's default packager)
 ModbusConfig config;
 config.responseTimeoutMs = 2000;
 config.queueSize = 32;
@@ -128,9 +126,8 @@ The library provides comprehensive error handling:
    - Consider latency requirements
 
 2. **Packager Selection**
-   - Use MBAP for TCP/IP communications
-   - Use RTU for binary serial connections
-   - Use ASCII for text-only systems
+   - Let transports provide their default packagers for standard usage
+   - Override with custom packagers only for special requirements
    - Choose appropriate packager for your device's protocol
 
 3. **Performance Optimization**

@@ -7,8 +7,10 @@ This guide covers RTU-specific configuration and usage of the Speed Framework Mo
 ```mermaid
 graph TB
     A[ModbusMaster] --> B[ModbusUartTransport]
+    B -->|Provides| P[RTU Packager]
+    A -->|Uses| P
     B --> C[UART Driver]
-    B --> D[CRC Calculator]
+    P --> D[CRC Calculator]
     C --> E[RS-485/RS-232]
 ```
 
