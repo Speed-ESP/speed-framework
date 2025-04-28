@@ -27,7 +27,7 @@ namespace speed
             class ModbusTcpTransport : public ModbusTransport
             {
             public:
-                ModbusTcpTransport(const std::string &host, uint16_t port, bool use_header = false);
+                ModbusTcpTransport(const std::string &host, uint16_t port);
                 ~ModbusTcpTransport();
 
                 bool begin() override;
@@ -39,18 +39,6 @@ namespace speed
                 bool receive(uint8_t *buffer, size_t expected_length, uint32_t timeout_ms) override;
                 
                 void flush() override;
-
-                // Frame length calculation methods
-                size_t getHeaderSize() const override { return ModbusConstants::TCP_HEADER_SIZE; }
-                size_t getFooterSize() const override { return 0; } // TCP doesn't use CRC
-                
-                size_t calculateFrameLength(size_t pduLength) const override { 
-                    return _use_header ? getHeaderSize() + pduLength : pduLength;
-                }
-                
-                size_t getExceptionResponseLength() const override { 
-                    return ModbusConstants::TCP_EXCEPTION_LENGTH;
-                }
 
                 // Get the default packager for TCP transport (MBAP)
                 std::shared_ptr<ModbusPackager> getDefaultPackager() const override {
@@ -75,7 +63,6 @@ namespace speed
 
                 std::string _host;
                 uint16_t _port;
-                bool _use_header;
                 int _socket;
                 bool _connected;
                 struct sockaddr_in _server_addr;

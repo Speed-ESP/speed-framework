@@ -4,12 +4,13 @@
 #include "net/modbus/modbus_config.hpp"
 #include "net/modbus/modbus_master.hpp"
 #include "net/modbus/modbus_device_manager.hpp"
+#include "net/modbus/packager/modbus_packager_factory.hpp"
 #include "net/modbus/transport/modbus_uart_transport.hpp"
 #include "net/modbus/transport/modbus_tcp_transport.hpp"
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "net/speed_net.hpp";
+#include "net/speed_net.hpp"
 
 using namespace speed::net::modbus;
 using namespace speed::net;
@@ -45,7 +46,7 @@ void app_main()
     ESP_LOGI(TAG,"Connected to: %s, Channel: %d, RSSI: %d",  info.ssid, info.primary, info.rssi);
 
     // Create TCP transport
-    auto transport = std::make_shared<ModbusTcpTransport>("192.168.100.76", 502, true);
+    auto transport = std::make_shared<ModbusTcpTransport>("192.168.100.76", 502);
     transport->setKeepAlive(true);
     // const auto rs485config = std::make_shared<Rs485UartConfig>();
     // // Alternative: Create RTU transport
@@ -61,6 +62,7 @@ void app_main()
     config.responseTimeoutMs = 2000;
     config.queueSize = 100;
     config.taskPriority = 7;
+    config.packager = ModbusPackagerFactory::createRtuPackager();
 
     auto master = std::make_shared<ModbusMaster>(transport, config);
 

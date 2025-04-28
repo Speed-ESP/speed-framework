@@ -44,16 +44,6 @@ namespace speed
                 {
                     return std::make_shared<ModbusAsciiPackager>();
                 }
-
-                /**
-                 * @brief Create a default packager for the specified transport type
-                 * @param isSerialTransport True if the transport is serial-based (UART), false for network-based (TCP)
-                 * @return std::shared_ptr<ModbusPackager> Default packager for the transport
-                 */
-                static std::shared_ptr<ModbusPackager> createDefaultPackager(bool isSerialTransport)
-                {
-                    return isSerialTransport ? createRtuPackager() : createMbapPackager();
-                }
             };
 
         } // namespace modbus

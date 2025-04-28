@@ -2,8 +2,6 @@
 #if !defined(CONFIG_SPEED_FRAMEWORK_USE_MODBUS)
 #warning "Enable modbus in Speed Framework -> Modbus using menuconfig"
 #endif
-#include <cstdint>
-#include <vector>
 #include <memory>
 #include <atomic>
 #include <map>
@@ -16,9 +14,10 @@
 #include <net/modbus/modbus_config.hpp>
 #include <net/modbus/modbus_defs.hpp>
 #include <net/modbus/transport/modbus_transport.hpp>
+
+
 #include <net/modbus/packager/modbus_packager.hpp>
 #include <net/modbus/packager/modbus_packager_factory.hpp>
-
 namespace speed
 {
     namespace net
@@ -29,7 +28,8 @@ namespace speed
             class ModbusMaster
             {
             public:
-                ModbusMaster(std::shared_ptr<ModbusTransport> transport, const ModbusConfig &config = ModbusConfig());
+                explicit ModbusMaster(std::shared_ptr<ModbusTransport> transport) : _transport(transport), _config(ModbusConfig()) {}
+                ModbusMaster(std::shared_ptr<ModbusTransport> transport, const ModbusConfig &config);
                 ~ModbusMaster();
 
                 bool begin();

@@ -135,19 +135,7 @@ namespace speed
                 bool receive(uint8_t *buffer, size_t expected_length, uint32_t timeout_ms) override;
                 
                 void flush() override;
-                
-                // Frame length calculation methods
-                size_t getHeaderSize() const override { return ModbusConstants::RTU_HEADER_SIZE; }
-                size_t getFooterSize() const override { return ModbusConstants::RTU_CRC_SIZE; }
-                
-                size_t calculateFrameLength(size_t pduLength) const override { 
-                    return getHeaderSize() + pduLength + getFooterSize();
-                }
-                
-                size_t getExceptionResponseLength() const override { 
-                    return ModbusConstants::RTU_EXCEPTION_LENGTH;
-                }
-                
+
                 // Get the default packager for UART transport (RTU)
                 std::shared_ptr<ModbusPackager> getDefaultPackager() const override {
                     return ModbusPackagerFactory::createRtuPackager();

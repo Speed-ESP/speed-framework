@@ -1,7 +1,7 @@
 #pragma once
 
+#include <atomic>
 #include <net/modbus/packager/modbus_packager.hpp>
-#include <net/modbus/transport/modbus_tcp_transport.hpp>
 
 namespace speed
 {

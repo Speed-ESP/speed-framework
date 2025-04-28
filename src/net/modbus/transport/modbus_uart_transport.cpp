@@ -49,7 +49,8 @@ namespace speed
                     .parity = parity,
                     .stop_bits = stopBits,
                     .flow_ctrl = flowControl,
-                    .rx_flow_ctrl_thresh = 0};
+                    .rx_flow_ctrl_thresh = 0,
+                    .source_clk = UART_SCLK_APB};
 
                 esp_err_t err = uart_param_config(uart_num, &uart_config);
                 if (err != ESP_OK)

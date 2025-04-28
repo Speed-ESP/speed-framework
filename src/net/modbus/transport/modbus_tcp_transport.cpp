@@ -17,8 +17,8 @@ namespace speed
 
             static const char *TAG = "ModbusTcpTransport";
 
-            ModbusTcpTransport::ModbusTcpTransport(const std::string &host, uint16_t port, bool use_header)
-                : _host(host), _port(port), _use_header(use_header), _socket(-1), _connected(false)
+            ModbusTcpTransport::ModbusTcpTransport(const std::string &host, uint16_t port)
+                : _host(host), _port(port), _socket(-1), _connected(false)
             {
                 memset(&_server_addr, 0, sizeof(_server_addr));
             }
@@ -184,43 +184,13 @@ namespace speed
 
             bool ModbusTcpTransport::sendModbusTcpPacket(const uint8_t *data, size_t length)
             {
-                if(_use_header) {
-                    ESP_LOGD(TAG, "Sending with header");
-                    ModbusTcpHeader header{
-                        .transactionId = _nextTransactionId.fetch_add(1, std::memory_order_relaxed),
-                        .protocolId = ModbusConstants::MODBUS_PROTOCOL_ID,
-                        .length = static_cast<uint16_t>(length), // Length of what follows
-                        .unitId = data[0]  // First byte is slave address
-                    };
-    
-                    // Reset transaction ID if it wraps around to 0
-                    if (_nextTransactionId.load(std::memory_order_relaxed) == 0) {
-                        _nextTransactionId.store(1, std::memory_order_relaxed);
-                    }
-    
-                    // Create a combined buffer to send header and data in one operation
-                    std::vector<uint8_t> combined_buffer(sizeof(header) + length - 1); // -1 because we skip the first byte (unit ID)
-                    
-                    // Copy header to the beginning of the buffer
-                    std::memcpy(combined_buffer.data(), &header, sizeof(header));
-                    
-                    // Copy PDU (skip first byte as it's already in header.unitId)
-                    std::memcpy(combined_buffer.data() + sizeof(header), data + 1, length - 1);
-                    
-                    // Send the combined packet in one operation
-                    if (!sendToSocket(combined_buffer.data(), combined_buffer.size())) {
-                        ESP_LOGE(TAG, "Failed to send combined TCP packet");
-                        return false;
-                    }
-                } else {
-                    ESP_LOGD(TAG, "Sending without header");
-                    // Send the entire data buffer without header
-                    if (!sendToSocket(data, length)) {
-                        ESP_LOGE(TAG, "Failed to send data");
-                        return false;
-                    }
+                ESP_LOGD(TAG, "Sending without header");
+                // Send the entire data buffer without header
+                if (!sendToSocket(data, length))
+                {
+                    ESP_LOGE(TAG, "Failed to send data");
+                    return false;
                 }
-
                 return true;
             }
 
@@ -236,58 +206,18 @@ namespace speed
                     return false;
                 }
 
-                // When not using headers, we'll directly get the exact length we requested
-                if (!_use_header) {
-                    return true;
-                }
-                
                 // When using headers, verify that the actual length matches what we expected
                 return actualLength == expected_length;
             }
 
             bool ModbusTcpTransport::receiveModbusTcpPackage(uint8_t *buffer, size_t &length, uint32_t timeout_ms)
             {
-                if (_use_header) {
-                    ModbusTcpHeader header;
-                    if (!receiveFromSocket(reinterpret_cast<uint8_t *>(&header), sizeof(header), timeout_ms))
-                    {
-                        ESP_LOGE(TAG, "Failed to receive TCP header");
-                        return false;
-                    }
-    
-                    // Validate protocol ID
-                    if (header.protocolId != ModbusConstants::MODBUS_PROTOCOL_ID)
-                    {
-                        ESP_LOGE(TAG, "Invalid protocol ID: %d", header.protocolId);
-                        return false;
-                    }
-    
-                    // Calculate PDU length
-                    size_t pduLength = header.length - 1; // -1 for unit ID
-                    if (pduLength > length)
-                    {
-                        ESP_LOGE(TAG, "Response too large for buffer");
-                        return false;
-                    }
-    
-                    // Copy unit ID to first byte of buffer
-                    buffer[0] = header.unitId;
-    
-                    // Receive PDU
-                    if (!receiveFromSocket(buffer + 1, pduLength, timeout_ms))
-                    {
-                        ESP_LOGE(TAG, "Failed to receive PDU");
-                        return false;
-                    }
-    
-                    length = pduLength + 1; // +1 for unit ID
-                } else {
-                    // No header mode - directly receive the expected data
-                    if (!receiveFromSocket(buffer, length, timeout_ms))
-                    {
-                        ESP_LOGE(TAG, "Failed to receive data without header");
-                        return false;
-                    }
+
+                // No header mode - directly receive the expected data
+                if (!receiveFromSocket(buffer, length, timeout_ms))
+                {
+                    ESP_LOGE(TAG, "Failed to receive data without header");
+                    return false;
                 }
                 return true;
             }

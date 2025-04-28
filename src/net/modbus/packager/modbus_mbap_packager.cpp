@@ -1,6 +1,7 @@
 #include <net/modbus/packager/modbus_mbap_packager.hpp>
 #include <esp_log.h>
 #include <inttypes.h>
+#include <esp_random.h>
 
 namespace speed
 {
