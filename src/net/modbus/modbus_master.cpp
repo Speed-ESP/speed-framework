@@ -19,7 +19,7 @@ namespace speed
                   _globalCallback(nullptr), _running(false), _config(config)
             {
                 _transactionSemaphore = xSemaphoreCreateMutex();
-                
+
                 // Initialize the default packager for this transport
                 initializeDefaultPackager();
             }
@@ -60,7 +60,6 @@ namespace speed
                     return false;
                 }
                 ESP_LOGD(TAG, "Processing modbus task crated with priority: %lu, and stack: %lu", _config.taskPriority, _config.stackSize);
-                
 
                 return true;
             }
@@ -108,58 +107,64 @@ namespace speed
 
             bool ModbusMaster::readInputRegisters(uint8_t slaveAddr, uint16_t startAddr, uint16_t quantity, ModbusCallback callback)
             {
-                if (quantity > ModbusConstants::MAX_REGISTERS_PER_REQUEST) {
+                if (quantity > ModbusConstants::MAX_REGISTERS_PER_REQUEST)
+                {
                     ESP_LOGE(TAG, "Quantity exceeds maximum allowed registers (%" PRIu16 " > %" PRIu16 ")",
                              quantity, ModbusConstants::MAX_REGISTERS_PER_REQUEST);
                     throw std::invalid_argument("Quantity exceeds maximum allowed registers");
                 }
-                
-                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS) {
+
+                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS)
+                {
                     ESP_LOGE(TAG, "Invalid slave address: %" PRIu8, slaveAddr);
                     throw std::invalid_argument("Invalid slave address");
                 }
 
                 ESP_LOGD(TAG, "Reading %" PRIu16 " input registers from address %" PRIu16 " of slave %" PRIu8,
                          quantity, startAddr, slaveAddr);
-                         
+
                 return sendRequest(slaveAddr, ModbusFunction::ReadInputRegisters, startAddr, quantity, {}, callback);
             }
 
             bool ModbusMaster::readCoils(uint8_t slaveAddr, uint16_t startAddr, uint16_t quantity, ModbusCallback callback)
             {
-                if (quantity > ModbusConstants::MAX_COILS_PER_REQUEST) {
+                if (quantity > ModbusConstants::MAX_COILS_PER_REQUEST)
+                {
                     ESP_LOGE(TAG, "Quantity exceeds maximum allowed coils (%" PRIu16 " > %" PRIu16 ")",
                              quantity, ModbusConstants::MAX_COILS_PER_REQUEST);
                     throw std::invalid_argument("Quantity exceeds maximum allowed coils");
                 }
-                
-                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS) {
+
+                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS)
+                {
                     ESP_LOGE(TAG, "Invalid slave address: %" PRIu8, slaveAddr);
                     throw std::invalid_argument("Invalid slave address");
                 }
 
                 ESP_LOGD(TAG, "Reading %" PRIu16 " coils from address %" PRIu16 " of slave %" PRIu8,
                          quantity, startAddr, slaveAddr);
-                         
+
                 return sendRequest(slaveAddr, ModbusFunction::ReadCoils, startAddr, quantity, {}, callback);
             }
 
             bool ModbusMaster::readDiscreteInputs(uint8_t slaveAddr, uint16_t startAddr, uint16_t quantity, ModbusCallback callback)
             {
-                if (quantity > ModbusConstants::MAX_COILS_PER_REQUEST) {
+                if (quantity > ModbusConstants::MAX_COILS_PER_REQUEST)
+                {
                     ESP_LOGE(TAG, "Quantity exceeds maximum allowed discrete inputs (%" PRIu16 " > %" PRIu16 ")",
                              quantity, ModbusConstants::MAX_COILS_PER_REQUEST);
                     throw std::invalid_argument("Quantity exceeds maximum allowed discrete inputs");
                 }
-                
-                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS) {
+
+                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS)
+                {
                     ESP_LOGE(TAG, "Invalid slave address: %" PRIu8, slaveAddr);
                     throw std::invalid_argument("Invalid slave address");
                 }
 
                 ESP_LOGD(TAG, "Reading %" PRIu16 " discrete inputs from address %" PRIu16 " of slave %" PRIu8,
                          quantity, startAddr, slaveAddr);
-                         
+
                 return sendRequest(slaveAddr, ModbusFunction::ReadDiscreteInputs, startAddr, quantity, {}, callback);
             }
 
@@ -171,7 +176,8 @@ namespace speed
 
             bool ModbusMaster::writeSingleCoil(uint8_t slaveAddr, uint16_t coilAddr, bool value, ModbusCallback callback)
             {
-                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS && slaveAddr != ModbusConstants::BROADCAST_ADDRESS) {
+                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS && slaveAddr != ModbusConstants::BROADCAST_ADDRESS)
+                {
                     ESP_LOGE(TAG, "Invalid slave address: %" PRIu8, slaveAddr);
                     throw std::invalid_argument("Invalid slave address");
                 }
@@ -182,18 +188,20 @@ namespace speed
                 // In Modbus protocol, coil value is represented as 0xFF00 for ON and 0x0000 for OFF
                 uint16_t modbusValue = value ? 0xFF00 : 0x0000;
                 std::vector<uint8_t> data = {static_cast<uint8_t>(modbusValue >> 8), static_cast<uint8_t>(modbusValue & 0xFF)};
-                
+
                 return sendRequest(slaveAddr, ModbusFunction::WriteSingleCoil, coilAddr, 1, data, callback);
             }
 
             bool ModbusMaster::writeMultipleRegisters(uint8_t slaveAddr, uint16_t startAddr, const std::vector<uint16_t> &values, ModbusCallback callback)
             {
-                if (values.empty() || values.size() > ModbusConstants::MAX_REGISTERS_PER_REQUEST) {
+                if (values.empty() || values.size() > ModbusConstants::MAX_REGISTERS_PER_REQUEST)
+                {
                     ESP_LOGE(TAG, "Invalid number of registers to write (%" PRIu16 ")", static_cast<uint16_t>(values.size()));
                     throw std::invalid_argument("Invalid number of registers");
                 }
 
-                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS && slaveAddr != ModbusConstants::BROADCAST_ADDRESS) {
+                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS && slaveAddr != ModbusConstants::BROADCAST_ADDRESS)
+                {
                     ESP_LOGE(TAG, "Invalid slave address: %" PRIu8, slaveAddr);
                     throw std::invalid_argument("Invalid slave address");
                 }
@@ -206,7 +214,8 @@ namespace speed
                 data.push_back(static_cast<uint8_t>(values.size() * 2)); // Byte count
 
                 // Add register values
-                for (uint16_t value : values) {
+                for (uint16_t value : values)
+                {
                     data.push_back(static_cast<uint8_t>(value >> 8));
                     data.push_back(static_cast<uint8_t>(value & 0xFF));
                 }
@@ -216,12 +225,14 @@ namespace speed
 
             bool ModbusMaster::writeMultipleCoils(uint8_t slaveAddr, uint16_t startAddr, const std::vector<bool> &values, ModbusCallback callback)
             {
-                if (values.empty() || values.size() > ModbusConstants::MAX_COILS_PER_REQUEST) {
+                if (values.empty() || values.size() > ModbusConstants::MAX_COILS_PER_REQUEST)
+                {
                     ESP_LOGE(TAG, "Invalid number of coils to write (%" PRIu16 ")", static_cast<uint16_t>(values.size()));
                     throw std::invalid_argument("Invalid number of coils");
                 }
 
-                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS && slaveAddr != ModbusConstants::BROADCAST_ADDRESS) {
+                if (slaveAddr > ModbusConstants::MAX_DEVICE_ADDRESS && slaveAddr != ModbusConstants::BROADCAST_ADDRESS)
+                {
                     ESP_LOGE(TAG, "Invalid slave address: %" PRIu8, slaveAddr);
                     throw std::invalid_argument("Invalid slave address");
                 }
@@ -238,13 +249,16 @@ namespace speed
                 uint8_t currentByte = 0;
                 uint8_t bitIndex = 0;
 
-                for (size_t i = 0; i < values.size(); i++) {
-                    if (values[i]) {
+                for (size_t i = 0; i < values.size(); i++)
+                {
+                    if (values[i])
+                    {
                         currentByte |= (1 << bitIndex);
                     }
                     bitIndex++;
-                    
-                    if (bitIndex == 8 || i == values.size() - 1) {
+
+                    if (bitIndex == 8 || i == values.size() - 1)
+                    {
                         data.push_back(currentByte);
                         currentByte = 0;
                         bitIndex = 0;
@@ -275,7 +289,7 @@ namespace speed
                 {
                     return false;
                 }
-                ESP_LOGD(TAG, "Queuing request with transacitonId %u to device %d", transaction.transactionId, transaction.slaveAddr);
+                ESP_LOGV(TAG, "Queuing request with transacitonId %u to device %d", transaction.transactionId, transaction.slaveAddr);
                 if (xQueueSend(_requestQueue, &transaction, pdMS_TO_TICKS(_config.queueTimeoutMs)) != pdTRUE)
                 {
                     ESP_LOGE(TAG, "Failed to queue Modbus request");
@@ -294,18 +308,18 @@ namespace speed
 
             void ModbusMaster::modbusTask(void *parameter)
             {
-                ModbusMaster* self = (ModbusMaster*)parameter;
+                ModbusMaster *self = (ModbusMaster *)parameter;
                 ModbusTransaction transaction;
                 TickType_t lastCleanupTime = xTaskGetTickCount();
                 ESP_LOGI(TAG, "Starting processing request task, is running? %d", self->_running.load());
                 while (self->_running)
                 {
-                    ESP_LOGD(TAG, "Dequeing from request queue");
+                    ESP_LOGV(TAG, "Dequeing from request queue");
                     if (xQueueReceive(self->_requestQueue, &transaction, pdMS_TO_TICKS(self->_config.queueTimeoutMs)) == pdTRUE)
                     {
                         self->processRequest(transaction);
                     }
-                    ESP_LOGD(TAG, "Couldn't read from the request queue queue");
+                    ESP_LOGV(TAG, "Couldn't read from the request queue queue");
                     // Periodic cleanup of timed-out transactions
                     if ((xTaskGetTickCount() - lastCleanupTime) > pdMS_TO_TICKS(1000))
                     {
@@ -319,8 +333,8 @@ namespace speed
 
             bool ModbusMaster::processRequest(ModbusTransaction &transaction)
             {
-                ESP_LOGD(TAG,"Processing request id: %d, to device: %d", transaction.transactionId, transaction.slaveAddr);
-                
+                ESP_LOGD(TAG, "Processing request id: %d, to device: %d", transaction.transactionId, transaction.slaveAddr);
+
                 // Use the packager to format the request
                 std::vector<uint8_t> requestData;
                 if (!_packager->packageRequest(transaction, requestData))
@@ -346,6 +360,7 @@ namespace speed
                 size_t expectedLength = _packager->calculateExpectedResponseLength(transaction);
                 std::vector<uint8_t> responseData(expectedLength);
 
+                _transport->flush();
                 if (!_transport->receive(responseData.data(), expectedLength, _config.responseTimeoutMs))
                 {
                     ESP_LOGE(TAG, "Failed to receive response");
@@ -367,10 +382,12 @@ namespace speed
 
                 updateStatistics(transaction);
 
+                auto callback = transaction.callback ? transaction.callback : _globalCallback;
                 // Execute callbacks
-                if (_globalCallback)
+                if (callback)
                 {
-                    _globalCallback(transaction.slaveAddr, transaction.function, transaction.data, transaction.status);
+                    ESP_LOGD(TAG, "Executing callback for transaction: %d", transaction.transactionId);
+                    callback(transaction.slaveAddr, transaction.function, transaction.data, transaction.status);
                 }
 
                 {
@@ -437,7 +454,7 @@ namespace speed
 
             void ModbusMaster::cleanupTimedOutTransactions()
             {
-                ESP_LOGD(TAG,"Cleaning timed out transactions");
+                ESP_LOGV(TAG, "Cleaning timed out transactions");
                 std::lock_guard<std::mutex> lock(_transactionMutex);
                 auto now = xTaskGetTickCount();
 
@@ -449,7 +466,7 @@ namespace speed
                         {
                             it->second.callback(it->second.slaveAddr, it->second.function, {}, TransactionStatus::Timeout);
                         }
-                        ESP_LOGD(TAG, "Transaction %u to slave %d timed out", it->first, it->second.slaveAddr);
+                        ESP_LOGW(TAG, "Transaction %u to slave %d timed out", it->first, it->second.slaveAddr);
                         _statistics.timeouts++;
                         _statistics.failedTransactions++;
                         it = _pendingTransactions.erase(it);
@@ -551,11 +568,12 @@ namespace speed
 
             void ModbusMaster::setPackager(std::shared_ptr<ModbusPackager> packager)
             {
-                if (!packager) {
+                if (!packager)
+                {
                     ESP_LOGE(TAG, "Cannot set null packager");
                     return;
                 }
-                
+
                 _packager = packager;
                 ESP_LOGI(TAG, "Packager changed");
             }
@@ -563,12 +581,13 @@ namespace speed
             void ModbusMaster::initializeDefaultPackager()
             {
                 // If a packager was provided in the config, use it
-                if (_config.packager) {
+                if (_config.packager)
+                {
                     ESP_LOGI(TAG, "Using packager from config");
                     _packager = _config.packager;
                     return;
                 }
-                
+
                 // Otherwise, use the transport's default packager
                 _packager = _transport->getDefaultPackager();
                 ESP_LOGI(TAG, "Using default packager from transport");

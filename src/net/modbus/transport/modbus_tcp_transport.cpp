@@ -184,7 +184,8 @@ namespace speed
 
             bool ModbusTcpTransport::sendModbusTcpPacket(const uint8_t *data, size_t length)
             {
-                ESP_LOGD(TAG, "Sending without header");
+                ESP_LOGD(TAG, "Sending data to: %s", _host.c_str());
+                ESP_LOG_BUFFER_HEXDUMP(TAG, data, length, ESP_LOG_DEBUG);
                 // Send the entire data buffer without header
                 if (!sendToSocket(data, length))
                 {
@@ -213,7 +214,6 @@ namespace speed
             bool ModbusTcpTransport::receiveModbusTcpPackage(uint8_t *buffer, size_t &length, uint32_t timeout_ms)
             {
 
-                // No header mode - directly receive the expected data
                 if (!receiveFromSocket(buffer, length, timeout_ms))
                 {
                     ESP_LOGE(TAG, "Failed to receive data without header");
@@ -269,6 +269,8 @@ namespace speed
                     return false;
                 }
 
+                ESP_LOGD(TAG,"Starting receve data from %s", _host.c_str());
+
                 struct timeval original_timeout;
                 socklen_t len = sizeof(original_timeout);
                 // Save original timeout
@@ -323,6 +325,8 @@ namespace speed
                     setsockopt(_socket, SOL_SOCKET, SO_RCVTIMEO, &original_timeout, len);
                 }
 
+                ESP_LOGD(TAG, "Data from %s received!", _host.c_str());
+                ESP_LOG_BUFFER_HEX_LEVEL(TAG, buffer, length, ESP_LOG_DEBUG);
                 return true;
             }
 

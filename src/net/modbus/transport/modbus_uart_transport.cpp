@@ -261,6 +261,7 @@ namespace speed
             {
                 if (!_initialized)
                 {
+                    ESP_LOGE(TAG, "Transport not initialized");
                     return false;
                 }
 

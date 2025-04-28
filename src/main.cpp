@@ -36,14 +36,15 @@ void app_main()
 
     wifi.connect();
 
-    while(!wifi.waitForConnection(10000)){
+    while (!wifi.waitForConnection(10000))
+    {
         ESP_LOGI(TAG, "Failed to connect to WiFi");
         vTaskDelay(pdMS_TO_TICKS(2000));
         wifi.connect();
     }
 
     auto info = wifi.getConnectionInfo();
-    ESP_LOGI(TAG,"Connected to: %s, Channel: %d, RSSI: %d",  info.ssid, info.primary, info.rssi);
+    ESP_LOGI(TAG, "Connected to: %s, Channel: %d, RSSI: %d", info.ssid, info.primary, info.rssi);
 
     // Create TCP transport
     auto transport = std::make_shared<ModbusTcpTransport>("192.168.100.76", 502);
@@ -62,7 +63,6 @@ void app_main()
     config.responseTimeoutMs = 2000;
     config.queueSize = 100;
     config.taskPriority = 7;
-    config.packager = ModbusPackagerFactory::createRtuPackager();
 
     auto master = std::make_shared<ModbusMaster>(transport, config);
 
@@ -74,12 +74,13 @@ void app_main()
 
     // Create device manager
     auto deviceManager = std::make_shared<ModbusDeviceManager>(master);
-    
+
     // Configure the default polling interval (applies to registers with 0 interval)
     deviceManager->setPollInterval(1000); // 1 second default polling interval
-    
+
     // Start the centralized polling task - manages polling for all devices
-    if (!deviceManager->startPolling()) {
+    if (!deviceManager->startPolling())
+    {
         ESP_LOGE(TAG, "Failed to start polling task");
     }
 
@@ -88,18 +89,20 @@ void app_main()
     // auto slave2 = deviceManager->addDevice(2, "Slave 2");
 
     // Configure polling for each device - these will be managed by the device manager
-    slave1->enablePolling(1, 2000, [](const ModbusValue &value) {
+    slave1->enablePolling(1, 2000, [](const ModbusValue &value)
+                          {
         if (value.valid) {
             ESP_LOGI(TAG, "Slave 1 - Register 0: %d", value.value);
-        }
-    });
-    
+        }else{
+            ESP_LOGE(TAG, "Error reading registry 1");
+        }});
+
     // slave1->enablePolling(1, 1000, [](const ModbusValue &value) {
     //     if (value.valid) {
     //         ESP_LOGI(TAG, "Slave 1 - Register 1: %d", value.value);
     //     }
     // });
-    
+
     // slave2->enablePolling(0, 2000, [](const ModbusValue &value) {
     //     if (value.valid) {
     //         ESP_LOGI(TAG, "Slave 2 - Register 0: %d", value.value);
@@ -107,13 +110,15 @@ void app_main()
     // });
 
     // Main loop
-    while (1) {
+    while (1)
+    {
         // Print network statistics every 30 seconds
         static uint32_t lastStats = 0;
         uint32_t now = xTaskGetTickCount();
-        
-        if ((now - lastStats) >= pdMS_TO_TICKS(30000)) {
-            const auto& stats = deviceManager->getNetworkStatistics();
+
+        if ((now - lastStats) >= pdMS_TO_TICKS(30000))
+        {
+            const auto &stats = deviceManager->getNetworkStatistics();
             ESP_LOGI(TAG, "Network Statistics:");
             ESP_LOGI(TAG, "  Successful transactions: %li", stats.successfulTransactions);
             ESP_LOGI(TAG, "  Failed transactions: %li", stats.failedTransactions);
