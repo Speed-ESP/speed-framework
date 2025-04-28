@@ -97,6 +97,15 @@ namespace speed
                  * @return size_t Total frame length including header and footer
                  */
                 virtual size_t calculateFrameLength(size_t pduLength) const = 0;
+                
+                /**
+                 * @brief Dump formatted data to console for debugging
+                 * 
+                 * @param label Description of the data being dumped
+                 * @param data The data to dump
+                 * @param isRequest true if this is request data, false if response
+                 */
+                virtual void dumpData(const char* label, const std::vector<uint8_t>& data, bool isRequest = true) const = 0;
             };
 
         } // namespace modbus

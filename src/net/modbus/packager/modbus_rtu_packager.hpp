@@ -30,6 +30,7 @@ namespace speed
                 size_t getHeaderSize() const override;
                 size_t getFooterSize() const override;
                 size_t calculateFrameLength(size_t pduLength) const override;
+                void dumpData(const char* label, const std::vector<uint8_t>& data, bool isRequest = true) const override;
 
             private:
                 uint16_t calculateCRC(const uint8_t* data, size_t length) const;

@@ -29,7 +29,7 @@ namespace speed
                 size_t getHeaderSize() const override;
                 size_t getFooterSize() const override;
                 size_t calculateFrameLength(size_t pduLength) const override;
-
+                void dumpData(const char* label, const std::vector<uint8_t>& data, bool isRequest) const override;
             private:
                 // ASCII mode constants
                 static constexpr char ASCII_START = ':';   // Start of frame

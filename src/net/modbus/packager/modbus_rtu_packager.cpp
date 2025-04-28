@@ -163,6 +163,110 @@ namespace speed
                 return utils::calculateCRC(data, length);
             }
 
+            void ModbusRtuPackager::dumpData(const char* label, const std::vector<uint8_t>& data, bool isRequest) const
+            {
+                if (data.empty()) {
+                    ESP_LOGI(TAG, "%s: [empty]", label);
+                    return;
+                }
+
+                // Ensure we have enough data for a valid RTU frame
+                if (data.size() < 4) { // Minimum: slave addr + function code + 2-byte CRC
+                    ESP_LOGI(TAG, "%s: [invalid length: %zu bytes]", label, data.size());
+                    return;
+                }
+
+                uint8_t slaveAddr = data[0];
+                uint8_t functionCode = data[1];
+                uint16_t crc = (data[data.size() - 1] << 8) | data[data.size() - 2];
+                
+                // Calculate header text width based on type
+                const char* typeStr = isRequest ? "REQUEST" : "RESPONSE";
+                
+                // Print header
+                ESP_LOGI(TAG, "┌─────────────────────────────────────────────────────┐");
+                ESP_LOGI(TAG, "│ MODBUS RTU %-10s: %-30s │", typeStr, label);
+                ESP_LOGI(TAG, "├─────────┬─────────┬───────────────────────┬─────────┤");
+                ESP_LOGI(TAG, "│ Address │ Function│ Data                  │ CRC     │");
+                ESP_LOGI(TAG, "├─────────┼─────────┼───────────────────────┼─────────┤");
+                
+                // Format slave address and function code
+                char addrStr[16], funcStr[16], crcStr[16];
+                snprintf(addrStr, sizeof(addrStr), "0x%02X", slaveAddr);
+                
+                // For function codes, show both hex and description
+                const char* funcDesc = "Unknown";
+                if (functionCode & 0x80) {
+                    snprintf(funcStr, sizeof(funcStr), "0x%02X", functionCode & 0x7F);
+                    funcDesc = "Exception";
+                } else {
+                    snprintf(funcStr, sizeof(funcStr), "0x%02X", functionCode);
+                    switch (functionCode) {
+                        case 0x01: funcDesc = "Read Coils"; break;
+                        case 0x02: funcDesc = "Read Inputs"; break;
+                        case 0x03: funcDesc = "Read Holding"; break;
+                        case 0x04: funcDesc = "Read Input Reg"; break;
+                        case 0x05: funcDesc = "Write Coil"; break;
+                        case 0x06: funcDesc = "Write Register"; break;
+                        case 0x0F: funcDesc = "Write Coils"; break;
+                        case 0x10: funcDesc = "Write Registers"; break;
+                        default: break;
+                    }
+                }
+                
+                snprintf(crcStr, sizeof(crcStr), "0x%04X", crc);
+                
+                // Format data bytes
+                char dataStr[64] = {0};
+                int offset = 0;
+                
+                // PDU data starts at byte 2 and excludes CRC (last 2 bytes)
+                for (size_t i = 2; i < data.size() - 2 && offset < sizeof(dataStr) - 5; i++) {
+                    offset += snprintf(dataStr + offset, sizeof(dataStr) - offset, "%02X ", data[i]);
+                    
+                    // Add ellipsis if too long
+                    if (i >= 10 && i < data.size() - 3) {
+                        snprintf(dataStr + offset, sizeof(dataStr) - offset, "...");
+                        break;
+                    }
+                }
+                
+                // Print the data row
+                ESP_LOGI(TAG, "│ %-7s │ %-7s │ %-21s │ %-7s │", addrStr, funcStr, dataStr, crcStr);
+                
+                // Print function description in next row
+                ESP_LOGI(TAG, "│         │ %-7s │                       │         │", funcDesc);
+                
+                // Print footer
+                ESP_LOGI(TAG, "└─────────┴─────────┴───────────────────────┴─────────┘");
+                
+                // Dump hex of all data if needed for deeper debugging
+                if (esp_log_level_get(TAG) >= ESP_LOG_DEBUG) {
+                    ESP_LOGD(TAG, "Full hex dump:");
+                    for (size_t i = 0; i < data.size(); i += 16) {
+                        char hexLine[50] = {0};
+                        char asciiLine[18] = {0};
+                        int hexOffset = 0;
+                        int asciiOffset = 0;
+                        
+                        for (size_t j = 0; j < 16 && i + j < data.size(); j++) {
+                            hexOffset += snprintf(hexLine + hexOffset, sizeof(hexLine) - hexOffset, 
+                                                 "%02X ", data[i + j]);
+                                                 
+                            // Add ASCII representation
+                            if (data[i + j] >= 32 && data[i + j] <= 126) {
+                                asciiOffset += snprintf(asciiLine + asciiOffset, sizeof(asciiLine) - asciiOffset,
+                                                      "%c", data[i + j]);
+                            } else {
+                                asciiOffset += snprintf(asciiLine + asciiOffset, sizeof(asciiLine) - asciiOffset, ".");
+                            }
+                        }
+                        
+                        ESP_LOGD(TAG, "%04zX: %-48s  %s", i, hexLine, asciiLine);
+                    }
+                }
+            }
+
         } // namespace modbus
     } // namespace net
 } // namespace speed

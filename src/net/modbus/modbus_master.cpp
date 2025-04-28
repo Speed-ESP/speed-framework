@@ -284,15 +284,10 @@ namespace speed
                 transaction.status = TransactionStatus::Pending;
                 transaction.retryCount = 0;
                 transaction.timestamp = xTaskGetTickCount();
+                transaction.callback = callback;
 
                 if (!validateRequest(transaction))
                 {
-                    return false;
-                }
-                ESP_LOGV(TAG, "Queuing request with transacitonId %u to device %d", transaction.transactionId, transaction.slaveAddr);
-                if (xQueueSend(_requestQueue, &transaction, pdMS_TO_TICKS(_config.queueTimeoutMs)) != pdTRUE)
-                {
-                    ESP_LOGE(TAG, "Failed to queue Modbus request");
                     return false;
                 }
 
@@ -303,6 +298,12 @@ namespace speed
                     _pendingTransactions[transaction.transactionId] = transaction;
                 }
 
+                ESP_LOGV(TAG, "Queuing request with transacitonId %u to device %d", transaction.transactionId, transaction.slaveAddr);
+                if (xQueueSend(_requestQueue, &transaction, pdMS_TO_TICKS(_config.queueTimeoutMs)) != pdTRUE)
+                {
+                    ESP_LOGE(TAG, "Failed to queue Modbus request");
+                    return false;
+                }
                 return true;
             }
 
@@ -345,6 +346,13 @@ namespace speed
                     return false;
                 }
 
+                // Dump the request data for debugging
+                if (esp_log_level_get(TAG) >= ESP_LOG_INFO) {
+                    char label[64];
+                    snprintf(label, sizeof(label), "TX #%d to %d", transaction.transactionId, transaction.slaveAddr);
+                    _packager->dumpData(label, requestData, true);
+                }
+
                 _transport->flush();
                 if (!_transport->send(requestData.data(), requestData.size()))
                 {
@@ -369,6 +377,13 @@ namespace speed
                     return retryTransaction(transaction);
                 }
 
+                // Dump the response data for debugging
+                if (esp_log_level_get(TAG) >= ESP_LOG_INFO) {
+                    char label[64];
+                    snprintf(label, sizeof(label), "RX #%d from %d", transaction.transactionId, transaction.slaveAddr);
+                    _packager->dumpData(label, responseData, false);
+                }
+
                 _statistics.messagesReceived++;
 
                 // Parse response using the packager
@@ -382,24 +397,26 @@ namespace speed
 
                 updateStatistics(transaction);
 
-                auto callback = transaction.callback ? transaction.callback : _globalCallback;
+               
                 // Execute callbacks
-                if (callback)
+                if (_globalCallback)
                 {
-                    ESP_LOGD(TAG, "Executing callback for transaction: %d", transaction.transactionId);
-                    callback(transaction.slaveAddr, transaction.function, transaction.data, transaction.status);
+                    ESP_LOGD(TAG, "Executing global callback for transaction: %d", transaction.transactionId);
+                    _globalCallback(transaction.slaveAddr, transaction.function, transaction.data, transaction.status);
                 }
 
                 {
+                    ESP_LOGD(TAG, "Finding local callback for transaction: %d", transaction.transactionId);
                     std::lock_guard<std::mutex> lock(_transactionMutex);
                     auto it = _pendingTransactions.find(transaction.transactionId);
                     if (it != _pendingTransactions.end())
                     {
+                        ESP_LOGD(TAG, "Executing local callback for transaction: %d", transaction.transactionId);
                         if (it->second.callback)
                         {
                             it->second.callback(transaction.slaveAddr, transaction.function, transaction.data, transaction.status);
                         }
-                        _pendingTransactions.erase(it);
+                        _pendingTransactions.erase(transaction.transactionId);
                     }
                 }
 

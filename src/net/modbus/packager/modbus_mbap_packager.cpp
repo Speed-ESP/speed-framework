@@ -205,6 +205,120 @@ namespace speed
                 return _nextTransactionId++;
             }
 
+            void ModbusMbapPackager::dumpData(const char* label, const std::vector<uint8_t>& data, bool isRequest) const
+            {
+                if (data.empty()) {
+                    ESP_LOGI(TAG, "%s: [empty]", label);
+                    return;
+                }
+
+                // Ensure we have enough data for a valid MBAP frame
+                if (data.size() < ModbusConstants::TCP_HEADER_SIZE + 1) { // Minimum: MBAP header (7) + function code (1)
+                    ESP_LOGI(TAG, "%s: [invalid length: %zu bytes]", label, data.size());
+                    return;
+                }
+
+                // Extract MBAP header fields
+                uint16_t transactionId = (data[0] << 8) | data[1];
+                uint16_t protocolId = (data[2] << 8) | data[3];
+                uint16_t length = (data[4] << 8) | data[5];
+                uint8_t unitId = data[6];
+                uint8_t functionCode = data[7];
+                
+                // Calculate header text width based on type
+                const char* typeStr = isRequest ? "REQUEST" : "RESPONSE";
+                
+                // Print header
+                ESP_LOGI(TAG, "┌───────────────────────────────────────────────────────────────────┐");
+                ESP_LOGI(TAG, "│ MODBUS TCP %-10s: %-37s │", typeStr, label);
+                ESP_LOGI(TAG, "├──────────┬──────────┬─────────┬─────────┬───────────────────────┤");
+                ESP_LOGI(TAG, "│ Trans ID │ Proto ID │ Length  │ Unit ID │ Function & Data       │");
+                ESP_LOGI(TAG, "├──────────┼──────────┼─────────┼─────────┼───────────────────────┤");
+                
+                // Format fields
+                char tidStr[16], pidStr[16], lenStr[16], uidStr[16], funcStr[16];
+                snprintf(tidStr, sizeof(tidStr), "0x%04X", transactionId);
+                snprintf(pidStr, sizeof(pidStr), "0x%04X", protocolId);
+                snprintf(lenStr, sizeof(lenStr), "%u", length);
+                snprintf(uidStr, sizeof(uidStr), "0x%02X", unitId);
+                
+                // For function codes, show hex
+                if (functionCode & 0x80) {
+                    snprintf(funcStr, sizeof(funcStr), "0x%02X", functionCode & 0x7F);
+                } else {
+                    snprintf(funcStr, sizeof(funcStr), "0x%02X", functionCode);
+                }
+                
+                // Format data bytes
+                char dataStr[64] = {0};
+                int offset = 0;
+                
+                // PDU data starts at byte 8 (function code + data)
+                for (size_t i = 8; i < data.size() && offset < sizeof(dataStr) - 5; i++) {
+                    offset += snprintf(dataStr + offset, sizeof(dataStr) - offset, "%02X ", data[i]);
+                    
+                    // Add ellipsis if too long
+                    if (i >= 16 && i < data.size() - 1) {
+                        snprintf(dataStr + offset, sizeof(dataStr) - offset, "...");
+                        break;
+                    }
+                }
+                
+                // Print the data row
+                ESP_LOGI(TAG, "│ %-8s │ %-8s │ %-7s │ %-7s │ %-21s │", 
+                         tidStr, pidStr, lenStr, uidStr, dataStr);
+                
+                // Function code description
+                const char* funcDesc = "Unknown";
+                if (functionCode & 0x80) {
+                    funcDesc = "Exception";
+                } else {
+                    switch (functionCode) {
+                        case 0x01: funcDesc = "Read Coils"; break;
+                        case 0x02: funcDesc = "Read Discrete Inputs"; break;
+                        case 0x03: funcDesc = "Read Holding Registers"; break;
+                        case 0x04: funcDesc = "Read Input Registers"; break;
+                        case 0x05: funcDesc = "Write Single Coil"; break;
+                        case 0x06: funcDesc = "Write Single Register"; break;
+                        case 0x0F: funcDesc = "Write Multiple Coils"; break;
+                        case 0x10: funcDesc = "Write Multiple Registers"; break;
+                        default: break;
+                    }
+                }
+                
+                // Print function description
+                ESP_LOGI(TAG, "│          │          │         │         │ %-21s │", funcDesc);
+                
+                // Print footer
+                ESP_LOGI(TAG, "└──────────┴──────────┴─────────┴─────────┴───────────────────────┘");
+                
+                // Dump hex of all data if needed for deeper debugging
+                if (esp_log_level_get(TAG) >= ESP_LOG_DEBUG) {
+                    ESP_LOGD(TAG, "Full hex dump:");
+                    for (size_t i = 0; i < data.size(); i += 16) {
+                        char hexLine[50] = {0};
+                        char asciiLine[18] = {0};
+                        int hexOffset = 0;
+                        int asciiOffset = 0;
+                        
+                        for (size_t j = 0; j < 16 && i + j < data.size(); j++) {
+                            hexOffset += snprintf(hexLine + hexOffset, sizeof(hexLine) - hexOffset, 
+                                                 "%02X ", data[i + j]);
+                                                 
+                            // Add ASCII representation
+                            if (data[i + j] >= 32 && data[i + j] <= 126) {
+                                asciiOffset += snprintf(asciiLine + asciiOffset, sizeof(asciiLine) - asciiOffset,
+                                                      "%c", data[i + j]);
+                            } else {
+                                asciiOffset += snprintf(asciiLine + asciiOffset, sizeof(asciiLine) - asciiOffset, ".");
+                            }
+                        }
+                        
+                        ESP_LOGD(TAG, "%04zX: %-48s  %s", i, hexLine, asciiLine);
+                    }
+                }
+            }
+
         } // namespace modbus
     } // namespace net
 } // namespace speed

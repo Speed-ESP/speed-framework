@@ -308,6 +308,152 @@ namespace speed
                 low = (lowNibble <= 9) ? ('0' + lowNibble) : ('A' + lowNibble - 10);
             }
 
+            void ModbusAsciiPackager::dumpData(const char* label, const std::vector<uint8_t>& data, bool isRequest) const
+            {
+                if (data.empty()) {
+                    ESP_LOGI(TAG, "%s: [empty]", label);
+                    return;
+                }
+
+                // Ensure we have enough data for a valid ASCII frame
+                if (data.size() < 9) { // Minimum: start + 2 chars addr + 2 chars func + 2 chars LRC + CR + LF
+                    ESP_LOGI(TAG, "%s: [invalid length: %zu bytes]", label, data.size());
+                    return;
+                }
+
+                // Verify start and end delimiters
+                if (data[0] != ASCII_START || data[data.size() - 2] != ASCII_END_CR || 
+                    data[data.size() - 1] != ASCII_END_LF) {
+                    ESP_LOGI(TAG, "%s: [invalid delimiters]", label);
+                    return;
+                }
+                
+                // Extract ASCII hex content (without delimiters)
+                std::vector<uint8_t> asciiContent(data.begin() + 1, data.end() - 2);
+                
+                // Convert to binary for easier reading
+                std::vector<uint8_t> binaryContent = hexToBytes(asciiContent);
+                
+                if (binaryContent.empty()) {
+                    ESP_LOGI(TAG, "%s: [invalid hex encoding]", label);
+                    return;
+                }
+                
+                uint8_t slaveAddr = binaryContent[0];
+                uint8_t functionCode = binaryContent[1];
+                uint8_t lrc = binaryContent[binaryContent.size() - 1];
+                
+                // Calculate header text width based on type
+                const char* typeStr = isRequest ? "REQUEST" : "RESPONSE";
+                
+                // Print header
+                ESP_LOGI(TAG, "┌───────────────────────────────────────────────────────────────┐");
+                ESP_LOGI(TAG, "│ MODBUS ASCII %-10s: %-32s │", typeStr, label);
+                ESP_LOGI(TAG, "├─────────┬─────────┬─────────────────────────────┬─────────┤");
+                ESP_LOGI(TAG, "│ Address │ Function│ Data (Binary)               │ LRC     │");
+                ESP_LOGI(TAG, "├─────────┼─────────┼─────────────────────────────┼─────────┤");
+                
+                // Format fields
+                char addrStr[16], funcStr[16], lrcStr[16];
+                snprintf(addrStr, sizeof(addrStr), "0x%02X", slaveAddr);
+                
+                // For function codes, show hex
+                if (functionCode & 0x80) {
+                    snprintf(funcStr, sizeof(funcStr), "0x%02X", functionCode & 0x7F);
+                } else {
+                    snprintf(funcStr, sizeof(funcStr), "0x%02X", functionCode);
+                }
+                
+                snprintf(lrcStr, sizeof(lrcStr), "0x%02X", lrc);
+                
+                // Format data bytes - show binary content
+                char dataStr[64] = {0};
+                int offset = 0;
+                
+                // Binary data excluding slave addr, function code and LRC
+                for (size_t i = 2; i < binaryContent.size() - 1 && offset < sizeof(dataStr) - 5; i++) {
+                    offset += snprintf(dataStr + offset, sizeof(dataStr) - offset, "%02X ", binaryContent[i]);
+                    
+                    // Add ellipsis if too long
+                    if (i >= 10 && i < binaryContent.size() - 2) {
+                        snprintf(dataStr + offset, sizeof(dataStr) - offset, "...");
+                        break;
+                    }
+                }
+                
+                // Print the data row
+                ESP_LOGI(TAG, "│ %-7s │ %-7s │ %-27s │ %-7s │", addrStr, funcStr, dataStr, lrcStr);
+                
+                // Print ASCII representation (original format)
+                char asciiStr[64] = {0};
+                offset = 0;
+                
+                // Original ASCII data excluding delimiters
+                for (size_t i = 0; i < asciiContent.size() && offset < sizeof(asciiStr) - 5; i++) {
+                    offset += snprintf(asciiStr + offset, sizeof(asciiStr) - offset, "%c", asciiContent[i]);
+                    
+                    // Add ellipsis if too long
+                    if (i >= 20 && i < asciiContent.size() - 1) {
+                        snprintf(asciiStr + offset, sizeof(asciiStr) - offset, "...");
+                        break;
+                    }
+                }
+                
+                ESP_LOGI(TAG, "│         │         │ ASCII: %-21s │         │", asciiStr);
+                
+                // Function code description
+                const char* funcDesc = "Unknown";
+                if (functionCode & 0x80) {
+                    funcDesc = "Exception";
+                } else {
+                    switch (functionCode) {
+                        case 0x01: funcDesc = "Read Coils"; break;
+                        case 0x02: funcDesc = "Read Inputs"; break;
+                        case 0x03: funcDesc = "Read Holding"; break;
+                        case 0x04: funcDesc = "Read Input Reg"; break;
+                        case 0x05: funcDesc = "Write Coil"; break;
+                        case 0x06: funcDesc = "Write Register"; break;
+                        case 0x0F: funcDesc = "Write Coils"; break;
+                        case 0x10: funcDesc = "Write Registers"; break;
+                        default: break;
+                    }
+                }
+                
+                // Print function description
+                ESP_LOGI(TAG, "│         │ %-7s │                             │         │", funcDesc);
+                
+                // Print footer
+                ESP_LOGI(TAG, "└─────────┴─────────┴─────────────────────────────┴─────────┘");
+                
+                // Display raw data in debug level
+                if (esp_log_level_get(TAG) >= ESP_LOG_DEBUG) {
+                    ESP_LOGD(TAG, "Raw ASCII frame: :%s", std::string(data.begin() + 1, data.end() - 2).c_str());
+                    
+                    ESP_LOGD(TAG, "Full hex dump of binary data:");
+                    for (size_t i = 0; i < binaryContent.size(); i += 16) {
+                        char hexLine[50] = {0};
+                        char asciiLine[18] = {0};
+                        int hexOffset = 0;
+                        int asciiOffset = 0;
+                        
+                        for (size_t j = 0; j < 16 && i + j < binaryContent.size(); j++) {
+                            hexOffset += snprintf(hexLine + hexOffset, sizeof(hexLine) - hexOffset, 
+                                                 "%02X ", binaryContent[i + j]);
+                                                 
+                            // Add ASCII representation
+                            if (binaryContent[i + j] >= 32 && binaryContent[i + j] <= 126) {
+                                asciiOffset += snprintf(asciiLine + asciiOffset, sizeof(asciiLine) - asciiOffset,
+                                                      "%c", binaryContent[i + j]);
+                            } else {
+                                asciiOffset += snprintf(asciiLine + asciiOffset, sizeof(asciiLine) - asciiOffset, ".");
+                            }
+                        }
+                        
+                        ESP_LOGD(TAG, "%04zX: %-48s  %s", i, hexLine, asciiLine);
+                    }
+                }
+            }
+
         } // namespace modbus
     } // namespace net
 } // namespace speed
